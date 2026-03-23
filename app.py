@@ -16,7 +16,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ── Dark Terminal CSS ─────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
@@ -106,7 +105,7 @@ STRATEGIES = {
             "Competitive moat: weak / moderate / strong",
             "Bull/bear price targets for 12-month horizon",
             "Risk rating 1-10 + entry price zones",
-            "Stop-loss based on ATR × 1.5 below structure"
+            "Stop-loss based on ATR x 1.5 below structure"
         ]
     }
 }
@@ -117,7 +116,7 @@ BASE_PRICES = {
     "GOOGL": 175, "AMD": 145, "GLD": 210, "BTC": 85000
 }
 
-# ── Data & Indicator Functions ────────────────────────────────────────────────
+# ── Data & Indicators ─────────────────────────────────────────────────────────
 def generate_candles(base_price, tf_minutes, count):
     rng = np.random.default_rng(int(datetime.now().timestamp()) % 9999)
     vol = base_price * {1: 0.0008, 5: 0.0018, 10: 0.003}.get(tf_minutes, 0.002)
@@ -190,37 +189,53 @@ def get_markers(df, strategy):
 def build_chart(df, strategy):
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
                         row_heights=[0.78, 0.22], vertical_spacing=0.02)
+
     fig.add_trace(go.Candlestick(
         x=df.index, open=df["open"], high=df["high"], low=df["low"], close=df["close"],
         increasing=dict(line=dict(color="#00E676", width=1), fillcolor="#00E676"),
         decreasing=dict(line=dict(color="#FF1744", width=1), fillcolor="#FF1744"),
         name="PRICE", showlegend=False
     ), row=1, col=1)
-    vol_colors = ["#00E67633" if c > o else "#FF174433"
+
+    # ✅ rgba() instead of 8-digit hex
+    vol_colors = ["rgba(0,230,118,0.2)" if c > o else "rgba(255,23,68,0.2)"
                   for c, o in zip(df["close"], df["open"])]
-    fig.add_trace(go.Bar(x=df.index, y=df["volume"], marker_color=vol_colors,
-                         name="VOLUME", showlegend=False), row=2, col=1)
+    fig.add_trace(go.Bar(
+        x=df.index, y=df["volume"],
+        marker_color=vol_colors,
+        name="VOLUME", showlegend=False
+    ), row=2, col=1)
+
     hi, lo = df["high"].max(), df["low"].min()
     r = hi - lo
-    for price, color, lbl in [(hi, "#FF6B1A66", "HIGH"), (lo, "#00E67666", "LOW"), ((hi+lo)/2, "#8A8AB055", "MID")]:
+    mid = (hi + lo) / 2
+
+    # ✅ rgba() for all horizontal lines
+    for price, color, lbl in [
+        (hi,  "rgba(255,107,26,0.5)",  "HIGH"),
+        (lo,  "rgba(0,230,118,0.5)",   "LOW"),
+        (mid, "rgba(138,138,176,0.4)", "MID")
+    ]:
         fig.add_hline(y=price, line_color=color, line_dash="dash", line_width=1,
                       annotation_text=f" {lbl}", annotation_font_color=color,
                       annotation_font_size=9, row=1, col=1)
+
     if strategy == "Liquidity Sweep":
-        for p, lbl in [(hi - r * 0.1, "LIQ ↑"), (lo + r * 0.1, "LIQ ↓")]:
-            fig.add_hline(y=p, line_color="#FF6B1A99", line_width=2,
+        for p, lbl in [(hi - r * 0.1, "LIQ ZONE ↑"), (lo + r * 0.1, "LIQ ZONE ↓")]:
+            fig.add_hline(y=p, line_color="rgba(255,107,26,0.7)", line_width=2,
                           annotation_text=f" {lbl}", annotation_font_color="#FF6B1A",
                           annotation_font_size=9, row=1, col=1)
     elif strategy == "AMD Model":
-        for p, lbl in [(lo + r * 0.2, "ACC"), (hi - r * 0.15, "DIST")]:
-            fig.add_hline(y=p, line_color="#B388FF99", line_width=2,
+        for p, lbl in [(lo + r * 0.2, "ACC ZONE"), (hi - r * 0.15, "DIST ZONE")]:
+            fig.add_hline(y=p, line_color="rgba(179,136,255,0.7)", line_width=2,
                           annotation_text=f" {lbl}", annotation_font_color="#B388FF",
                           annotation_font_size=9, row=1, col=1)
     elif strategy == "Impulse Trend":
         ema21 = df["close"].ewm(span=21).mean().iloc[-1]
-        fig.add_hline(y=ema21, line_color="#00E67677", line_width=1,
+        fig.add_hline(y=ema21, line_color="rgba(0,230,118,0.6)", line_width=1,
                       annotation_text=" EMA 21", annotation_font_color="#00E676",
                       annotation_font_size=9, row=1, col=1)
+
     bx, by, sx, sy = get_markers(df, strategy)
     if bx:
         fig.add_trace(go.Scatter(x=bx, y=by, mode="markers",
@@ -230,6 +245,7 @@ def build_chart(df, strategy):
         fig.add_trace(go.Scatter(x=sx, y=sy, mode="markers",
             marker=dict(symbol="triangle-down", size=9, color="#FF1744"),
             name="SELL", showlegend=True), row=1, col=1)
+
     fig.update_layout(
         paper_bgcolor="#0A0A0F", plot_bgcolor="#0A0A0F",
         font=dict(family="JetBrains Mono", color="#8A8AB0", size=10),
@@ -239,78 +255,112 @@ def build_chart(df, strategy):
                     font=dict(color="#8A8AB0", size=9), x=0.01, y=0.99),
     )
     fig.update_xaxes(gridcolor="#1E1E3A", showgrid=True, zeroline=False,
-                     showspikes=True, spikecolor="#FF6B1A55", spikethickness=1)
+                     showspikes=True, spikecolor="rgba(255,107,26,0.4)", spikethickness=1)
     fig.update_yaxes(gridcolor="#1E1E3A", showgrid=True, zeroline=False,
-                     showspikes=True, spikecolor="#FF6B1A55", spikethickness=1)
+                     showspikes=True, spikecolor="rgba(255,107,26,0.4)", spikethickness=1)
     return fig
 
-# ── HTML helpers ──────────────────────────────────────────────────────────────
+# ── HTML Helpers ──────────────────────────────────────────────────────────────
 def panel_header(text):
-    return f'<div style="padding:7px 12px;background:rgba(255,107,26,0.08);border:1px solid #1E1E3A;border-radius:4px 4px 0 0;font-size:9px;letter-spacing:3px;color:#FF6B1A;font-weight:700;text-transform:uppercase">{text}</div>'
+    return (f'<div style="padding:7px 12px;background:rgba(255,107,26,0.08);'
+            f'border:1px solid #1E1E3A;border-radius:4px 4px 0 0;font-size:9px;'
+            f'letter-spacing:3px;color:#FF6B1A;font-weight:700;text-transform:uppercase">{text}</div>')
 
 def signal_card(label, value, color, sub):
-    return f'<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;padding:10px 12px;margin-bottom:6px"><div style="font-size:9px;letter-spacing:2px;color:#444466;text-transform:uppercase">{label}</div><div style="font-size:22px;font-weight:700;color:{color}">{value}</div><div style="font-size:10px;color:#8A8AB0;margin-top:2px">{sub}</div></div>'
+    return (f'<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;'
+            f'padding:10px 12px;margin-bottom:6px">'
+            f'<div style="font-size:9px;letter-spacing:2px;color:#444466;text-transform:uppercase">{label}</div>'
+            f'<div style="font-size:22px;font-weight:700;color:{color}">{value}</div>'
+            f'<div style="font-size:10px;color:#8A8AB0;margin-top:2px">{sub}</div></div>')
 
 def ind_card(label, value, color):
-    return f'<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;padding:8px 6px;text-align:center"><div style="font-size:8px;letter-spacing:2px;color:#444466;text-transform:uppercase">{label}</div><div style="font-size:17px;font-weight:700;color:{color};margin-top:2px">{value}</div></div>'
+    return (f'<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;'
+            f'padding:8px 6px;text-align:center">'
+            f'<div style="font-size:8px;letter-spacing:2px;color:#444466;text-transform:uppercase">{label}</div>'
+            f'<div style="font-size:17px;font-weight:700;color:{color};margin-top:2px">{value}</div></div>')
 
 def ai_row(label, value, color):
-    return f'<div style="display:flex;justify-content:space-between;font-size:10px;padding:5px 0;border-bottom:1px solid #1E1E3A"><span style="color:#8A8AB0">{label}</span><span style="font-weight:700;color:{color}">{value}</span></div>'
+    return (f'<div style="display:flex;justify-content:space-between;font-size:10px;'
+            f'padding:5px 0;border-bottom:1px solid #1E1E3A">'
+            f'<span style="color:#8A8AB0">{label}</span>'
+            f'<span style="font-weight:700;color:{color}">{value}</span></div>')
 
 def ts_item(label, value, color):
-    return f'<div style="background:#0F0F1A;border:1px solid #1E1E3A;border-radius:2px;padding:8px;text-align:center"><div style="font-size:8px;letter-spacing:2px;color:#444466;text-transform:uppercase">{label}</div><div style="font-size:15px;font-weight:700;color:{color}">{value}</div></div>'
+    return (f'<div style="background:#0F0F1A;border:1px solid #1E1E3A;border-radius:2px;'
+            f'padding:8px;text-align:center">'
+            f'<div style="font-size:8px;letter-spacing:2px;color:#444466;text-transform:uppercase">{label}</div>'
+            f'<div style="font-size:15px;font-weight:700;color:{color}">{value}</div></div>')
 
 # ── SIDEBAR ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown('''<div style="display:flex;align-items:center;gap:10px;padding:8px 0 18px 0;border-bottom:1px solid #1E1E3A;margin-bottom:16px">
-    <div style="width:28px;height:28px;background:#FF6B1A;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)"></div>
-    <span style="color:#FF6B1A;font-size:13px;font-weight:700;letter-spacing:4px">APEX TERMINAL</span>
-    </div>''', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="display:flex;align-items:center;gap:10px;padding:8px 0 18px 0;'
+        'border-bottom:1px solid #1E1E3A;margin-bottom:16px">'
+        '<div style="width:28px;height:28px;background:#FF6B1A;'
+        'clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)"></div>'
+        '<span style="color:#FF6B1A;font-size:13px;font-weight:700;letter-spacing:4px">APEX TERMINAL</span>'
+        '</div>', unsafe_allow_html=True)
 
     ticker = st.text_input("TICKER", value="SPY", max_chars=6).upper().strip() or "SPY"
+
     st.markdown(panel_header("⬡ TIMEFRAME"), unsafe_allow_html=True)
-    tf_label = st.radio("", ["1M", "5M", "10M"], horizontal=True, label_visibility="collapsed", key="tf")
+    tf_label = st.radio("", ["1M", "5M", "10M"], horizontal=True,
+                        label_visibility="collapsed", key="tf")
     tf_min = int(tf_label[:-1])
+
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown(panel_header("⬡ STRATEGY"), unsafe_allow_html=True)
-    strategy = st.selectbox("", list(STRATEGIES.keys()), label_visibility="collapsed", key="strat")
+    strategy = st.selectbox("", list(STRATEGIES.keys()),
+                            label_visibility="collapsed", key="strat")
+
     analyze = st.button("▶ ANALYZE", type="primary")
 
     st.markdown("<br>", unsafe_allow_html=True)
     strat_cfg = STRATEGIES[strategy]
     rules_html = "".join([
-        f'<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #1E1E3A;font-size:10px;color:#8A8AB0;align-items:flex-start"><div style="width:5px;height:5px;min-width:5px;border-radius:50%;background:{strat_cfg["color"]};margin-top:5px"></div><div>{r}</div></div>'
-        for r in strat_cfg["rules"]
+        f'<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #1E1E3A;'
+        f'font-size:10px;color:#8A8AB0;align-items:flex-start">'
+        f'<div style="width:5px;height:5px;min-width:5px;border-radius:50%;'
+        f'background:{strat_cfg["color"]};margin-top:5px"></div>'
+        f'<div>{rule}</div></div>'
+        for rule in strat_cfg["rules"]
     ])
-    st.markdown(f'''<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;overflow:hidden">
-    <div style="padding:9px 12px;border-bottom:1px solid #1E1E3A;display:flex;align-items:center;gap:10px">
-    <div style="background:{strat_cfg["color"]}22;color:{strat_cfg["color"]};font-weight:800;font-size:12px;padding:3px 7px;border-radius:2px">{strat_cfg["icon"]}</div>
-    <div><div style="font-size:11px;font-weight:700;color:#E8E8F0">{strategy}</div>
-    <div style="font-size:9px;color:#444466">{strat_cfg["description"]}</div></div></div>
-    <div style="padding:10px 12px">{rules_html}</div></div>''', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;overflow:hidden">'
+        f'<div style="padding:9px 12px;border-bottom:1px solid #1E1E3A;display:flex;align-items:center;gap:10px">'
+        f'<div style="background:{strat_cfg["color"]}22;color:{strat_cfg["color"]};font-weight:800;'
+        f'font-size:12px;padding:3px 7px;border-radius:2px">{strat_cfg["icon"]}</div>'
+        f'<div><div style="font-size:11px;font-weight:700;color:#E8E8F0">{strategy}</div>'
+        f'<div style="font-size:9px;color:#444466">{strat_cfg["description"]}</div></div></div>'
+        f'<div style="padding:10px 12px">{rules_html}</div></div>',
+        unsafe_allow_html=True)
 
-    st.markdown('<div style="margin-top:16px;font-size:9px;color:#444466;line-height:1.7">Risk models based on Goldman Sachs, Bridgewater & Morgan Stanley frameworks.<br>Not financial advice. Past performance ≠ future results.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="margin-top:16px;font-size:9px;color:#444466;line-height:1.7">'
+        'Risk models based on Goldman Sachs, Bridgewater & Morgan Stanley frameworks.<br>'
+        'Not financial advice. Past performance ≠ future results.</div>',
+        unsafe_allow_html=True)
 
-# ── GENERATE DATA ─────────────────────────────────────────────────────────────
+# ── GENERATE / CACHE DATA ─────────────────────────────────────────────────────
 cache_key = f"{ticker}_{tf_min}_{strategy}"
 if "cache_key" not in st.session_state or st.session_state.cache_key != cache_key or analyze:
-    base = BASE_PRICES.get(ticker, 150 + np.random.random() * 300)
+    base  = BASE_PRICES.get(ticker, 150 + np.random.random() * 300)
     count = {1: 120, 5: 100, 10: 80}.get(tf_min, 100)
-    df = generate_candles(base, tf_min, count)
-    rng2 = np.random.default_rng(int(datetime.now().timestamp()) % 7777)
-    st.session_state.df = df
+    df    = generate_candles(base, tf_min, count)
+    rng2  = np.random.default_rng(int(datetime.now().timestamp()) % 7777)
+    st.session_state.df        = df
     st.session_state.cache_key = cache_key
-    st.session_state.sig = {
-        "rsi": calc_rsi(df["close"].tolist()),
-        "macd": calc_macd(df["close"].tolist()),
-        "bb": calc_bb_pct(df["close"].tolist()),
+    st.session_state.sig       = {
+        "rsi":       calc_rsi(df["close"].tolist()),
+        "macd":      calc_macd(df["close"].tolist()),
+        "bb":        calc_bb_pct(df["close"].tolist()),
         "vol_ratio": calc_vol_ratio(df["volume"].tolist()),
         "sentiment": round((rng2.random() - 0.4) * 0.8, 3),
-        "vol_ann": round(12 + rng2.random() * 25, 1),
+        "vol_ann":   round(12 + rng2.random() * 25, 1),
         "sweep_str": float(rng2.random()),
-        "prob": round(50 + rng2.random() * 30, 1),
-        "acc": round(55 + rng2.random() * 25, 1),
-        "auc": round(0.55 + rng2.random() * 0.2, 2),
+        "prob":      round(50 + rng2.random() * 30, 1),
+        "acc":       round(55 + rng2.random() * 25, 1),
+        "auc":       round(0.55 + rng2.random() * 0.2, 2),
     }
 
 df = st.session_state.df
@@ -320,17 +370,19 @@ last  = df["close"].iloc[-1];  prev = df["close"].iloc[-2]
 chg   = last - prev;           chg_p = (chg / prev) * 100
 trend = last > prev
 
-rsi, macd, bb, vol_ratio = s["rsi"], s["macd"], s["bb"], s["vol_ratio"]
-sentiment, vol_ann, sweep_str, prob, acc, auc = (
-    s["sentiment"], s["vol_ann"], s["sweep_str"], s["prob"], s["acc"], s["auc"])
+rsi       = s["rsi"];       macd      = s["macd"]
+bb        = s["bb"];        vol_ratio = s["vol_ratio"]
+sentiment = s["sentiment"]; vol_ann   = s["vol_ann"]
+sweep_str = s["sweep_str"]; prob      = s["prob"]
+acc       = s["acc"];       auc       = s["auc"]
 
-direction = "BUY" if (trend and rsi < 70) else "SELL" if (not trend and rsi > 50) else "HOLD"
-dir_col   = "#00E676" if direction == "BUY" else "#FF1744" if direction == "SELL" else "#FFD600"
-vol_reg   = "LOW" if vol_ann < 18 else "NORMAL" if vol_ann < 28 else "HIGH"
+direction = "BUY"  if (trend and rsi < 70) else "SELL" if (not trend and rsi > 50) else "HOLD"
+dir_col   = "#00E676" if direction == "BUY"  else "#FF1744" if direction == "SELL"  else "#FFD600"
+vol_reg   = "LOW"  if vol_ann < 18 else "NORMAL" if vol_ann < 28 else "HIGH"
 vol_col   = "#00E676" if vol_ann < 18 else "#FFD600" if vol_ann < 28 else "#FF1744"
 sent_lbl  = "BULLISH" if sentiment > 0.1 else "BEARISH" if sentiment < -0.1 else "NEUTRAL"
-sent_col  = "#00E676" if sentiment > 0.1 else "#FF1744" if sentiment < -0.1 else "#FFD600"
-lgbm_sig  = "BUY" if (trend and rsi < 65) else "SELL" if (not trend and rsi > 50) else "HOLD"
+sent_col  = "#00E676" if sentiment > 0.1  else "#FF1744" if sentiment < -0.1  else "#FFD600"
+lgbm_sig  = "BUY"  if (trend and rsi < 65) else "SELL" if (not trend and rsi > 50) else "HOLD"
 lgbm_col  = "#00E676" if lgbm_sig == "BUY" else "#FF1744" if lgbm_sig == "SELL" else "#FFD600"
 garch_reg = "LOW VOL" if vol_ann < 18 else "NORMAL" if vol_ann < 28 else "HIGH VOL"
 garch_col = "#00E676" if vol_ann < 18 else "#FFD600" if vol_ann < 28 else "#FF1744"
@@ -348,17 +400,17 @@ chg_sign  = "+" if chg >= 0 else ""
 chg_clr   = "#00E676" if chg >= 0 else "#FF1744"
 
 # ── PRICE BAR ─────────────────────────────────────────────────────────────────
-st.markdown(f'''<div style="background:#0F0F1A;border:1px solid #1E1E3A;border-radius:4px;
-padding:12px 20px;display:flex;align-items:baseline;gap:16px;margin-bottom:12px;
-font-family:'JetBrains Mono',monospace">
-<span style="font-size:30px;font-weight:700;color:#FFD600;letter-spacing:-1px">${last:.2f}</span>
-<span style="font-size:14px;font-weight:600;color:{chg_clr}">{chg_sign}{chg:.2f} ({chg_sign}{chg_p:.2f}%)</span>
-<span style="font-size:10px;color:#444466;letter-spacing:2px">{ticker} · {tf_label}</span>
-<span style="margin-left:auto;font-size:9px;color:{badge_col};letter-spacing:1px;
-border:1px solid {badge_col}44;padding:3px 10px;border-radius:2px;background:{badge_col}11">
-{badge_txt}</span></div>''', unsafe_allow_html=True)
+st.markdown(
+    f'<div style="background:#0F0F1A;border:1px solid #1E1E3A;border-radius:4px;'
+    f'padding:12px 20px;display:flex;align-items:baseline;gap:16px;margin-bottom:12px">'
+    f'<span style="font-size:30px;font-weight:700;color:#FFD600;letter-spacing:-1px">${last:.2f}</span>'
+    f'<span style="font-size:14px;font-weight:600;color:{chg_clr}">{chg_sign}{chg:.2f} ({chg_sign}{chg_p:.2f}%)</span>'
+    f'<span style="font-size:10px;color:#444466;letter-spacing:2px">{ticker} · {tf_label}</span>'
+    f'<span style="margin-left:auto;font-size:9px;color:{badge_col};letter-spacing:1px;'
+    f'border:1px solid {badge_col};padding:3px 10px;border-radius:2px">{badge_txt}</span></div>',
+    unsafe_allow_html=True)
 
-# ── MAIN COLUMNS ──────────────────────────────────────────────────────────────
+# ── LAYOUT ────────────────────────────────────────────────────────────────────
 col_chart, col_right = st.columns([3, 1.15], gap="medium")
 
 with col_chart:
@@ -367,18 +419,22 @@ with col_chart:
 
     st.markdown(panel_header("⬡ LIVE SIGNALS"), unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
-    c1.markdown(signal_card("DIRECTION",         direction, dir_col,  f"Prob: {prob}%"), unsafe_allow_html=True)
-    c2.markdown(signal_card("VOLATILITY REGIME", vol_reg,   vol_col,  f"Ann. Vol: {vol_ann}%"), unsafe_allow_html=True)
-    c3.markdown(signal_card("SENTIMENT",         sent_lbl,  sent_col, f"Score: {'+' if sentiment > 0 else ''}{sentiment:.2f}"), unsafe_allow_html=True)
+    c1.markdown(signal_card("DIRECTION",         direction, dir_col,
+                             f"Prob: {prob}%"), unsafe_allow_html=True)
+    c2.markdown(signal_card("VOLATILITY REGIME", vol_reg,   vol_col,
+                             f"Ann. Vol: {vol_ann}%"), unsafe_allow_html=True)
+    c3.markdown(signal_card("SENTIMENT",         sent_lbl,  sent_col,
+                             f"Score: {'+' if sentiment > 0 else ''}{sentiment:.2f}"),
+                unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown(panel_header("⬡ TECHNICAL INDICATORS"), unsafe_allow_html=True)
     i1, i2, i3, i4, i5 = st.columns(5)
-    i1.markdown(ind_card("RSI(14)",   f"{rsi}",                            rsi_col),  unsafe_allow_html=True)
+    i1.markdown(ind_card("RSI(14)",   f"{rsi}",                             rsi_col),  unsafe_allow_html=True)
     i2.markdown(ind_card("MACD",      f"{'+' if macd>0 else ''}{macd:.3f}", macd_col), unsafe_allow_html=True)
-    i3.markdown(ind_card("BB %",      f"{bb:.2f}",                         "#00B0FF"), unsafe_allow_html=True)
-    i4.markdown(ind_card("VOL RATIO", f"{vol_ratio:.2f}×",                 "#FF6B1A"), unsafe_allow_html=True)
-    i5.markdown(ind_card("SWEEP STR", swp_lbl,                             swp_col),  unsafe_allow_html=True)
+    i3.markdown(ind_card("BB %",      f"{bb:.2f}",                          "#00B0FF"), unsafe_allow_html=True)
+    i4.markdown(ind_card("VOL RATIO", f"{vol_ratio:.2f}x",                  "#FF6B1A"), unsafe_allow_html=True)
+    i5.markdown(ind_card("SWEEP STR", swp_lbl,                              swp_col),  unsafe_allow_html=True)
 
 with col_right:
     rng3 = np.random.default_rng(int(datetime.now().timestamp()) % 3333)
@@ -388,37 +444,54 @@ with col_right:
         f'<div style="display:flex;align-items:center;gap:6px;font-size:9px;margin-bottom:5px">'
         f'<div style="color:#8A8AB0;width:28px">{lb}</div>'
         f'<div style="flex:1;height:14px;background:#0F0F1A;border-radius:2px;position:relative;overflow:hidden">'
-        f'<div style="position:absolute;left:0;top:0;bottom:0;width:{b}%;background:rgba(0,230,118,0.65);border-radius:2px 0 0 2px"></div>'
-        f'<div style="position:absolute;right:0;top:0;bottom:0;width:{100-b}%;background:rgba(255,23,68,0.65);border-radius:0 2px 2px 0"></div></div>'
+        f'<div style="position:absolute;left:0;top:0;bottom:0;width:{b}%;'
+        f'background:rgba(0,230,118,0.65);border-radius:2px 0 0 2px"></div>'
+        f'<div style="position:absolute;right:0;top:0;bottom:0;width:{100-b}%;'
+        f'background:rgba(255,23,68,0.65);border-radius:0 2px 2px 0"></div></div>'
         f'<div style="color:#444466;width:28px;text-align:right">{b}%</div></div>'
         for lb, b in zip(flow_labels, flow_buys)
     ])
-    st.markdown(f'<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;overflow:hidden;margin-bottom:12px">{panel_header("⬡ ORDER FLOW DELTA")}<div style="padding:10px 12px">{flow_rows}</div></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;'
+        f'overflow:hidden;margin-bottom:12px">{panel_header("⬡ ORDER FLOW DELTA")}'
+        f'<div style="padding:10px 12px">{flow_rows}</div></div>',
+        unsafe_allow_html=True)
 
-    ai_rows_html = "".join([ai_row(*r) for r in [
-        ("LightGBM",        lgbm_sig,                                           lgbm_col),
-        ("Up Probability",  f"{prob}%",                                         "#FFD600"),
-        ("Direction Acc.",  f"{acc}%",                                          "#FFD600"),
-        ("AUC (hold-out)",  str(auc),                                           "#FFD600"),
-        ("GARCH Regime",    garch_reg,                                          garch_col),
-        ("Ann. Volatility", f"{vol_ann}%",                                      garch_col),
-        ("VADER Sentiment", sent_lbl,                                           sent_col),
-        ("NLP Score",       f"{'+' if sentiment>0 else ''}{sentiment:.3f}",     sent_col),
+    ai_rows_html = "".join([ai_row(*row) for row in [
+        ("LightGBM",        lgbm_sig,                                       lgbm_col),
+        ("Up Probability",  f"{prob}%",                                     "#FFD600"),
+        ("Direction Acc.",  f"{acc}%",                                      "#FFD600"),
+        ("AUC (hold-out)",  str(auc),                                       "#FFD600"),
+        ("GARCH Regime",    garch_reg,                                      garch_col),
+        ("Ann. Volatility", f"{vol_ann}%",                                  garch_col),
+        ("VADER Sentiment", sent_lbl,                                       sent_col),
+        ("NLP Score",       f"{'+' if sentiment>0 else ''}{sentiment:.3f}", sent_col),
     ]])
-    st.markdown(f'''<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;overflow:hidden;margin-bottom:12px">
-    <div style="padding:8px 12px;background:rgba(179,136,255,0.08);border-bottom:1px solid #1E1E3A;display:flex;justify-content:space-between">
-    <span style="font-size:9px;letter-spacing:3px;color:#B388FF;font-weight:700">⬡ AI / ML ANALYSIS</span>
-    <span style="font-size:9px;color:#444466">LightGBM · GARCH · NLP</span></div>
-    <div style="padding:8px 12px">{ai_rows_html}</div></div>''', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;'
+        f'overflow:hidden;margin-bottom:12px">'
+        f'<div style="padding:8px 12px;background:rgba(179,136,255,0.08);'
+        f'border-bottom:1px solid #1E1E3A;display:flex;justify-content:space-between">'
+        f'<span style="font-size:9px;letter-spacing:3px;color:#B388FF;font-weight:700">⬡ AI / ML ANALYSIS</span>'
+        f'<span style="font-size:9px;color:#444466">LightGBM · GARCH · NLP</span></div>'
+        f'<div style="padding:8px 12px">{ai_rows_html}</div></div>',
+        unsafe_allow_html=True)
 
     ts_grid = (
         f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">'
-        f'{ts_item("ENTRY", f"${last:.2f}", "#FFD600")}{ts_item("STOP", f"${stop_p}", "#FF1744")}'
-        f'{ts_item("TP1", f"${tp1}", "#00E676")}{ts_item("TP2", f"${tp2}", "#00E676")}</div>'
-        f'<div style="background:#0F0F1A;border:1px solid #1E1E3A;border-radius:2px;padding:8px;text-align:center">'
+        f'{ts_item("ENTRY", f"${last:.2f}", "#FFD600")}'
+        f'{ts_item("STOP",  f"${stop_p}",  "#FF1744")}'
+        f'{ts_item("TP1",   f"${tp1}",     "#00E676")}'
+        f'{ts_item("TP2",   f"${tp2}",     "#00E676")}'
+        f'</div>'
+        f'<div style="background:#0F0F1A;border:1px solid #1E1E3A;border-radius:2px;'
+        f'padding:8px;text-align:center">'
         f'<div style="font-size:8px;letter-spacing:2px;color:#444466">RISK / REWARD</div>'
         f'<div style="font-size:14px;font-weight:700;color:#FF6B1A">2.0R · ATR ${atr:.2f}</div></div>'
     )
-    st.markdown(f'''<div style="background:#161628;border:1px solid #FF6B1A;border-radius:4px;padding:14px">
-    <div style="font-size:9px;letter-spacing:3px;color:#FF6B1A;font-weight:700;margin-bottom:10px">
-    ◈ TRADE SETUP — {strat_cfg["short"]}</div>{ts_grid}</div>''', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="background:#161628;border:1px solid #FF6B1A;border-radius:4px;padding:14px">'
+        f'<div style="font-size:9px;letter-spacing:3px;color:#FF6B1A;font-weight:700;margin-bottom:10px">'
+        f'◈ TRADE SETUP — {strat_cfg["short"]}</div>{ts_grid}</div>',
+        unsafe_allow_html=True)
+

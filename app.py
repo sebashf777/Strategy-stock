@@ -7,7 +7,8 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from datetime import datetime, timedelta
+from datetime import datetime
+import yfinance as yf
 
 st.set_page_config(
     page_title="APEX TRADING TERMINAL",
@@ -57,7 +58,7 @@ STRATEGIES = {
             "Entry after sweep + reversal candle + retest of swept level",
             "Target: next imbalance or fair value gap (FVG)",
             "Invalidation: candle closes beyond the swept level",
-            "1M: ultra-scalp | 5M: scalp | 10M: intraday swing"
+            "1M: ultra-scalp | 5M: scalp | 15M: intraday swing"
         ]
     },
     "AMD Model": {
@@ -68,7 +69,7 @@ STRATEGIES = {
             "Manipulation: false break of range (stop hunt)",
             "Distribution: price moves in the true intended direction",
             "Entry after M → D confirmation with displacement candle",
-            "1M: micro AMD cycle | 5M: session AMD | 10M: macro daily AMD",
+            "1M: micro AMD cycle | 5M: session AMD | 15M: macro daily AMD",
             "Valid across all sessions: London, NY, Asia"
         ]
     },
@@ -93,7 +94,7 @@ STRATEGIES = {
             "Entry: pullback to impulse origin with momentum confirmation",
             "Trend filter: EMA 21/50/200 alignment on higher TF",
             "Exit: next BOS level or 2R target",
-            "Works best on 5M and 10M; 1M = noise filter required"
+            "Works best on 5M and 15M; 1M = noise filter required"
         ]
     },
     "GS Screener": {
@@ -110,33 +111,28 @@ STRATEGIES = {
     }
 }
 
-BASE_PRICES = {
-    "SPY": 562, "QQQ": 478, "AAPL": 221, "TSLA": 268,
-    "NVDA": 880, "AMZN": 207, "MSFT": 415, "META": 577,
-    "GOOGL": 175, "AMD": 145, "GLD": 210, "BTC": 85000
-}
+# ── Yahoo Finance Data Fetch ───────────────────────────────────────────────────
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_data(ticker, tf_minutes):
+    interval_map = {1: "1m", 5: "5m", 15: "15m"}
+    period_map   = {1: "1d", 5: "5d", 15: "5d"}
+    interval = interval_map.get(tf_minutes, "5m")
+    period   = period_map.get(tf_minutes, "5d")
+    try:
+        raw = yf.download(ticker, interval=interval, period=period,
+                          progress=False, auto_adjust=True)
+        if raw.empty:
+            return None
+        # Flatten MultiIndex columns if present
+        if isinstance(raw.columns, pd.MultiIndex):
+            raw.columns = raw.columns.get_level_values(0)
+        raw.columns = [c.lower() for c in raw.columns]
+        df = raw[["open", "high", "low", "close", "volume"]].dropna()
+        return df.tail(120)
+    except Exception:
+        return None
 
-# ── Data & Indicators ─────────────────────────────────────────────────────────
-def generate_candles(base_price, tf_minutes, count):
-    rng = np.random.default_rng(int(datetime.now().timestamp()) % 9999)
-    vol = base_price * {1: 0.0008, 5: 0.0018, 10: 0.003}.get(tf_minutes, 0.002)
-    bias = (rng.random() - 0.48) * 0.3
-    dates = [datetime.now() - timedelta(minutes=tf_minutes * (count - i)) for i in range(count)]
-    rows, price = [], base_price
-    for _ in range(count):
-        r = vol * (0.5 + rng.random() * 1.5)
-        d = 1 if rng.random() > 0.5 - bias else -1
-        o = price
-        c = round(o + d * r * (0.3 + rng.random() * 0.7), 2)
-        h = round(max(o, c) + rng.random() * r * 0.5, 2)
-        l = round(min(o, c) - rng.random() * r * 0.5, 2)
-        v = int(50000 + rng.random() * 200000)
-        rows.append({"open": o, "high": h, "low": l, "close": c, "volume": v})
-        price = c
-        if rng.random() < 0.04:
-            price += d * vol * 2
-    return pd.DataFrame(rows, index=pd.DatetimeIndex(dates))
-
+# ── Indicators ────────────────────────────────────────────────────────────────
 def calc_rsi(closes, p=14):
     s = pd.Series(closes)
     d = s.diff()
@@ -175,7 +171,7 @@ def get_markers(df, strategy):
             if c["high"] > prev_hi and c["close"] < prev_hi and rng.random() < 0.25:
                 sell_x.append(df.index[i]); sell_y.append(c["high"] * 1.0007)
         elif strategy == "Order Flow":
-            if c["volume"] > 150000 and c["close"] > c["open"] and rng.random() < 0.35:
+            if c["volume"] > df["volume"].mean() * 1.5 and c["close"] > c["open"] and rng.random() < 0.35:
                 buy_x.append(df.index[i]); buy_y.append(c["low"] * 0.9993)
         elif strategy == "Impulse Trend":
             if i % 8 == 0 and c["close"] > c["open"]:
@@ -197,7 +193,6 @@ def build_chart(df, strategy):
         name="PRICE", showlegend=False
     ), row=1, col=1)
 
-    # ✅ rgba() instead of 8-digit hex
     vol_colors = ["rgba(0,230,118,0.2)" if c > o else "rgba(255,23,68,0.2)"
                   for c, o in zip(df["close"], df["open"])]
     fig.add_trace(go.Bar(
@@ -210,7 +205,6 @@ def build_chart(df, strategy):
     r = hi - lo
     mid = (hi + lo) / 2
 
-    # ✅ rgba() for all horizontal lines
     for price, color, lbl in [
         (hi,  "rgba(255,107,26,0.5)",  "HIGH"),
         (lo,  "rgba(0,230,118,0.5)",   "LOW"),
@@ -304,7 +298,7 @@ with st.sidebar:
     ticker = st.text_input("TICKER", value="SPY", max_chars=6).upper().strip() or "SPY"
 
     st.markdown(panel_header("⬡ TIMEFRAME"), unsafe_allow_html=True)
-    tf_label = st.radio("", ["1M", "5M", "10M"], horizontal=True,
+    tf_label = st.radio("", ["1M", "5M", "15M"], horizontal=True,
                         label_visibility="collapsed", key="tf")
     tf_min = int(tf_label[:-1])
 
@@ -337,17 +331,26 @@ with st.sidebar:
 
     st.markdown(
         '<div style="margin-top:16px;font-size:9px;color:#444466;line-height:1.7">'
-        'Risk models based on Goldman Sachs, Bridgewater & Morgan Stanley frameworks.<br>'
+        'Data sourced from Yahoo Finance via yfinance.<br>'
         'Not financial advice. Past performance ≠ future results.</div>',
         unsafe_allow_html=True)
 
-# ── GENERATE / CACHE DATA ─────────────────────────────────────────────────────
+# ── FETCH DATA ────────────────────────────────────────────────────────────────
+if "cache_key" not in st.session_state:
+    st.session_state.cache_key = ""
+
 cache_key = f"{ticker}_{tf_min}_{strategy}"
-if "cache_key" not in st.session_state or st.session_state.cache_key != cache_key or analyze:
-    base  = BASE_PRICES.get(ticker, 150 + np.random.random() * 300)
-    count = {1: 120, 5: 100, 10: 80}.get(tf_min, 100)
-    df    = generate_candles(base, tf_min, count)
-    rng2  = np.random.default_rng(int(datetime.now().timestamp()) % 7777)
+run = (st.session_state.cache_key != cache_key) or analyze
+
+if run:
+    with st.spinner(f"Fetching {ticker} data from Yahoo Finance..."):
+        df = fetch_data(ticker, tf_min)
+
+    if df is None or df.empty:
+        st.error(f"❌ Could not fetch data for **{ticker}**. Check the ticker symbol and try again.")
+        st.stop()
+
+    rng2 = np.random.default_rng(int(datetime.now().timestamp()) % 7777)
     st.session_state.df        = df
     st.session_state.cache_key = cache_key
     st.session_state.sig       = {
@@ -366,8 +369,10 @@ if "cache_key" not in st.session_state or st.session_state.cache_key != cache_ke
 df = st.session_state.df
 s  = st.session_state.sig
 
-last  = df["close"].iloc[-1];  prev = df["close"].iloc[-2]
-chg   = last - prev;           chg_p = (chg / prev) * 100
+last  = float(df["close"].iloc[-1])
+prev  = float(df["close"].iloc[-2])
+chg   = last - prev
+chg_p = (chg / prev) * 100
 trend = last > prev
 
 rsi       = s["rsi"];       macd      = s["macd"]
@@ -494,4 +499,5 @@ with col_right:
         f'<div style="font-size:9px;letter-spacing:3px;color:#FF6B1A;font-weight:700;margin-bottom:10px">'
         f'◈ TRADE SETUP — {strat_cfg["short"]}</div>{ts_grid}</div>',
         unsafe_allow_html=True)
+
 

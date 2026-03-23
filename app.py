@@ -1,905 +1,424 @@
+# ============================================================
+# APEX TRADING TERMINAL  ·  Streamlit Version
+# Copyright (c) 2026 Sebastian Hernandez Flores. All Rights Reserved.
+# ============================================================
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
 from plotly.subplots import make_subplots
+from datetime import datetime, timedelta
 
-# ── PAGE CONFIG ───────────────────────────────────────────────
 st.set_page_config(
-    page_title="PropIQ — Real Estate Analyzer",
-    page_icon="🏢",
+    page_title="APEX TRADING TERMINAL",
+    page_icon="◈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ── CUSTOM CSS ────────────────────────────────────────────────
+# ── Dark Terminal CSS ─────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
-
-:root {
-    --gold:    #C9A84C;
-    --gold-lt: #E8C97A;
-    --dark:    #0E1117;
-    --surface: #161B26;
-    --card:    #1C2333;
-    --border:  #2A3347;
-    --text:    #E8EAF0;
-    --muted:   #6B7A99;
-    --green:   #2ECC71;
-    --red:     #E74C3C;
-    --blue:    #3498DB;
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+html, body, [class*="css"] { font-family: 'JetBrains Mono', monospace !important; }
+.stApp { background-color: #0A0A0F !important; color: #E8E8F0 !important; }
+[data-testid="stSidebar"] { background-color: #0F0F1A !important; border-right: 1px solid #1E1E3A !important; }
+[data-testid="stSidebar"] * { color: #E8E8F0 !important; font-family: 'JetBrains Mono', monospace !important; }
+.stButton > button {
+    background-color: #FF6B1A !important; color: #000 !important;
+    font-family: 'JetBrains Mono', monospace !important; font-weight: 700 !important;
+    letter-spacing: 2px !important; border: none !important;
+    text-transform: uppercase !important; width: 100% !important;
 }
-
-html, body, [data-testid="stAppViewContainer"] {
-    background: var(--dark) !important;
-    font-family: 'DM Sans', sans-serif;
-    color: var(--text);
+.stButton > button:hover { background-color: #FF8C42 !important; }
+.stTextInput > div > div > input {
+    background-color: #161628 !important; color: #FFD600 !important;
+    border: 1px solid #2A2A50 !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-weight: 700 !important; font-size: 18px !important;
+    letter-spacing: 3px !important; text-transform: uppercase !important;
 }
-[data-testid="stSidebar"] {
-    background: var(--surface) !important;
-    border-right: 1px solid var(--border);
-}
-[data-testid="stSidebar"] * { color: var(--text) !important; }
-[data-testid="stHeader"] { display: none !important; }
-.block-container { padding: 2rem 2.5rem 4rem !important; max-width: 1400px !important; }
-
-/* ── KPI CARDS ── */
-.kpi-row { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-.kpi-card {
-    flex: 1; min-width: 160px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 18px 20px;
-    position: relative;
-    overflow: hidden;
-    transition: transform 0.2s, border-color 0.2s;
-}
-.kpi-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, var(--gold), var(--gold-lt));
-}
-.kpi-card:hover { border-color: var(--gold); transform: translateY(-2px); }
-.kpi-label { font-size: 11px; font-weight: 600; letter-spacing: 1.2px;
-             text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-.kpi-value { font-family: 'DM Serif Display', serif; font-size: 26px;
-             color: var(--text); line-height: 1.1; }
-.kpi-value.positive { color: var(--green); }
-.kpi-value.negative { color: var(--red); }
-.kpi-sub { font-size: 11px; color: var(--muted); margin-top: 6px; font-family: 'DM Mono', monospace; }
-.kpi-icon { position: absolute; top: 16px; right: 16px; font-size: 22px; opacity: 0.25; }
-
-/* ── SECTION HEADERS ── */
-.section-title {
-    font-family: 'DM Serif Display', serif;
-    font-size: 22px;
-    color: var(--text);
-    margin: 32px 0 16px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.section-title span { color: var(--gold); }
-
-/* ── PAGE TITLE ── */
-.page-title {
-    font-family: 'DM Serif Display', serif;
-    font-size: 42px;
-    background: linear-gradient(135deg, var(--gold), var(--gold-lt));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    line-height: 1.1;
-    margin-bottom: 4px;
-}
-.page-sub { color: var(--muted); font-size: 15px; margin-bottom: 32px; }
-
-/* ── STATUS BADGE ── */
-.badge {
-    display: inline-block;
-    padding: 3px 12px;
-    border-radius: 99px;
-    font-size: 12px;
-    font-weight: 600;
-    font-family: 'DM Mono', monospace;
-}
-.badge-green  { background: rgba(46,204,113,0.15); color: var(--green); border:1px solid rgba(46,204,113,0.3); }
-.badge-red    { background: rgba(231,76,60,0.15);  color: var(--red);   border:1px solid rgba(231,76,60,0.3); }
-.badge-gold   { background: rgba(201,168,76,0.15); color: var(--gold);  border:1px solid rgba(201,168,76,0.3); }
-.badge-blue   { background: rgba(52,152,219,0.15); color: var(--blue);  border:1px solid rgba(52,152,219,0.3); }
-
-/* ── VERDICT BOX ── */
-.verdict {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 24px 28px;
-    margin: 24px 0;
-}
-.verdict-title {
-    font-family: 'DM Serif Display', serif;
-    font-size: 20px;
-    margin-bottom: 12px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-/* ── TABLE STYLING ── */
-.stDataFrame { border-radius: 10px; overflow: hidden; }
-[data-testid="stDataFrameResizable"] { border: 1px solid var(--border) !important; border-radius: 10px; }
-
-/* ── SIDEBAR INPUTS ── */
-[data-testid="stNumberInput"] input,
-[data-testid="stTextInput"] input {
-    background: var(--card) !important;
-    border: 1px solid var(--border) !important;
-    color: var(--text) !important;
-    border-radius: 8px !important;
-    font-family: 'DM Mono', monospace !important;
-}
-[data-testid="stSlider"] { padding: 4px 0; }
-.stSlider [data-baseweb="slider"] { padding: 8px 0; }
-
-/* ── TABS ── */
-[data-testid="stTabs"] [role="tab"] {
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 500;
-    color: var(--muted) !important;
-    border-bottom: 2px solid transparent;
-    padding: 8px 20px;
-}
-[data-testid="stTabs"] [role="tab"][aria-selected="true"] {
-    color: var(--gold) !important;
-    border-bottom-color: var(--gold) !important;
-}
-[data-testid="stTabs"] [role="tablist"] {
-    border-bottom: 1px solid var(--border);
-    gap: 4px;
-}
-
-/* Divider */
-.divider { height:1px; background: var(--border); margin: 24px 0; }
+.stTextInput label { color: #444466 !important; font-size: 10px !important; letter-spacing: 2px !important; }
+.stRadio label { color: #8A8AB0 !important; font-size: 10px !important; letter-spacing: 1px !important; }
+.stSelectbox label { color: #444466 !important; font-size: 9px !important; letter-spacing: 2px !important; }
+.stSelectbox > div > div { background-color: #161628 !important; border-color: #1E1E3A !important; color: #E8E8F0 !important; }
+#MainMenu, footer, header { visibility: hidden; }
+.block-container { padding: 1rem 1.5rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── PLOTLY THEME ──────────────────────────────────────────────
-PLOT_LAYOUT = dict(
-    paper_bgcolor='rgba(0,0,0,0)',
-    plot_bgcolor='rgba(28,35,51,0.6)',
-    font=dict(family='DM Sans', color='#6B7A99', size=11),
-    margin=dict(l=10, r=10, t=40, b=10),
-    legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(color='#E8EAF0', size=11)),
-    xaxis=dict(gridcolor='#2A3347', linecolor='#2A3347', zerolinecolor='#2A3347'),
-    yaxis=dict(gridcolor='#2A3347', linecolor='#2A3347', zerolinecolor='#2A3347'),
-)
-COLORS = dict(gold='#C9A84C', gold_lt='#E8C97A', green='#2ECC71',
-              red='#E74C3C', blue='#3498DB', purple='#9B59B6',
-              teal='#1ABC9C', orange='#E67E22')
-
-# ── FINANCIAL FUNCTIONS ───────────────────────────────────────
-def monthly_payment(principal, annual_rate_pct, term_months):
-    r = annual_rate_pct / 1200
-    if r == 0:
-        return principal / term_months
-    return float(principal) * (r * (1 + r)**term_months) / ((1 + r)**term_months - 1)
-
-def calc_noi(rent, vacancy_pct, maintenance_pct, mgmt_fee_pct, annual_tax_pct, annual_ins_pct):
-    eff = rent * (1 - vacancy_pct / 100)
-    exp = eff * ((maintenance_pct + mgmt_fee_pct + annual_tax_pct + annual_ins_pct) / 100)
-    return (eff - exp) * 12
-
-def calc_max_purchase(rent, vacancy_pct, maintenance_pct, mgmt_fee_pct,
-                      annual_tax_pct, annual_ins_pct, rate_pct, term, min_cf=100):
-    r   = rate_pct / 1200
-    eff = rent * (1 - vacancy_pct / 100)
-    exp = eff * ((maintenance_pct + mgmt_fee_pct + annual_tax_pct + annual_ins_pct) / 100)
-    qty = (r * (1 + r)**term) / ((1 + r)**term - 1) if r > 0 else 1/term
-    return ((eff - exp - min_cf) / qty) / 0.80
-
-def build_amortization(principal, annual_rate_pct, term_months):
-    r       = annual_rate_pct / 1200
-    payment = monthly_payment(principal, annual_rate_pct, term_months)
-    balance = principal
-    cumint  = 0
-    records = []
-    for month in range(1, int(term_months) + 1):
-        interest      = balance * r
-        principal_pd  = payment - interest
-        balance      -= principal_pd
-        cumint       += interest
-        records.append({
-            'Month':              month,
-            'Payment':            round(payment, 2),
-            'Principal':          round(principal_pd, 2),
-            'Interest':           round(interest, 2),
-            'Balance':            round(max(balance, 0), 2),
-            'Cumul. Interest':    round(cumint, 2),
-            'Equity':             round(principal - max(balance, 0), 2),
-        })
-    return pd.DataFrame(records)
-
-def full_analysis(p):
-    payment    = monthly_payment(p['loan'], p['rate'], p['term'])
-    down       = p['price'] - p['loan']
-    cash_req   = down + p['closing']
-    noi        = calc_noi(p['rent'], p['vacancy'], p['maint'], p['mgmt'], p['tax'], p['ins'])
-    annual_debt= payment * 12
-    annual_cf  = noi - annual_debt
-    cap_rate   = (noi / p['price']) * 100 if p['price'] > 0 else 0
-    coc        = (annual_cf / cash_req) * 100 if cash_req > 0 else 0
-    dscr       = noi / annual_debt if annual_debt > 0 else 0
-    gross_yield= (p['rent'] * 12 / p['price']) * 100 if p['price'] > 0 else 0
-    max_price  = calc_max_purchase(p['rent'], p['vacancy'], p['maint'], p['mgmt'],
-                                   p['tax'], p['ins'], p['rate'], p['term'])
-    grm        = p['price'] / (p['rent'] * 12) if p['rent'] > 0 else 0
-    breakeven  = (p['loan'] * (1 - (p['vacancy']/100))) / p['price'] * 100 if p['price'] > 0 else 0
-
-    return dict(
-        payment=round(payment, 2),
-        total_payments=round(payment * p['term'], 2),
-        total_interest=round(payment * p['term'] - p['loan'], 2),
-        cash_required=round(cash_req, 2),
-        down_payment=round(down, 2),
-        annual_debt=round(annual_debt, 2),
-        noi=round(noi, 2),
-        annual_cf=round(annual_cf, 2),
-        monthly_cf=round(annual_cf / 12, 2),
-        cap_rate=round(cap_rate, 2),
-        coc=round(coc, 2),
-        dscr=round(dscr, 3),
-        gross_yield=round(gross_yield, 2),
-        max_price=round(max_price, 2),
-        grm=round(grm, 2),
-        breakeven_occ=round(breakeven, 1),
-        ltv=round((p['loan'] / p['price']) * 100, 1) if p['price'] > 0 else 0,
-    )
-
-# ── SIDEBAR — INPUTS ──────────────────────────────────────────
-with st.sidebar:
-    st.markdown("""
-    <div style='padding:20px 0 10px'>
-      <div style='font-family:"DM Serif Display",serif;font-size:26px;
-                  background:linear-gradient(135deg,#C9A84C,#E8C97A);
-                  -webkit-background-clip:text;-webkit-text-fill-color:transparent'>
-        PropIQ
-      </div>
-      <div style='font-size:12px;color:#6B7A99;margin-top:2px'>
-        Real Estate Investment Analyzer
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-    st.markdown("---")
-
-    project_name = st.text_input("🏷️ Project Name", value="Sample Property")
-
-    st.markdown("#### 📋 Property Details")
-    price   = st.number_input("Purchase Price ($)", value=350_000, step=5_000, format="%d")
-    rent    = st.number_input("Monthly Rent ($)",   value=2_800,  step=50,    format="%d")
-    closing = st.number_input("Closing Costs ($)",  value=7_000,  step=500,   format="%d")
-    arv     = st.number_input("After Repair Value ($)", value=400_000, step=5_000, format="%d")
-    repair  = st.number_input("Repair Costs ($)",   value=15_000, step=1_000, format="%d")
-
-    st.markdown("#### 🏦 Loan Details")
-    use_default = st.checkbox("Use 80% LTV (default)", value=True)
-    if use_default:
-        loan = price * 0.80
-        st.caption(f"Loan Amount: ${loan:,.0f}")
-    else:
-        loan = st.number_input("Loan Amount ($)", value=int(price * 0.80), step=5_000, format="%d")
-    rate = st.number_input("Interest Rate (%)", value=7.25, step=0.125, format="%.3f")
-    term = st.selectbox("Loan Term", [360, 180, 120, 84], format_func=lambda x: f"{x} months ({x//12} yrs)")
-
-    st.markdown("#### 📊 Operating Expenses")
-    vacancy = st.slider("Vacancy Rate (%)",    0.0, 25.0, 5.0, 0.5)
-    maint   = st.slider("Maintenance (%)",     0.0, 25.0, 5.0, 0.5)
-    mgmt    = st.slider("Mgmt Fee (%)",        0.0, 20.0, 8.0, 0.5)
-    tax     = st.slider("Annual Tax (%)",      0.0, 5.0,  1.2, 0.1)
-    ins     = st.slider("Annual Insurance (%)",0.0, 3.0,  0.5, 0.1)
-
-    st.markdown("#### 🔄 Analysis")
-    sens    = st.slider("Sensitivity (%)", 5.0, 30.0, 10.0, 5.0)
-    hold_yrs= st.slider("Hold Period (years)", 1, 30, 10)
-    app_rate= st.slider("Annual Appreciation (%)", 0.0, 10.0, 3.0, 0.5)
-    rent_gr = st.slider("Annual Rent Growth (%)",  0.0, 10.0, 2.0, 0.5)
-
-    st.markdown("---")
-    st.caption("💡 All calculations assume monthly compounding.")
-
-# ── INPUTS DICT ───────────────────────────────────────────────
-p = dict(price=price, rent=rent, closing=closing, loan=loan,
-         rate=rate, term=term, vacancy=vacancy, maint=maint,
-         mgmt=mgmt, tax=tax, ins=ins)
-
-r  = full_analysis(p)
-am = build_amortization(loan, rate, term)
-
-# ── SENSITIVITY SCENARIOS ─────────────────────────────────────
-p_up   = {**p, 'price': price*(1+sens/100), 'rent': rent*(1+sens/100),
-           'loan': loan*(1+sens/100), 'closing': closing*(1+sens/100)}
-p_down = {**p, 'price': price*(1-sens/100), 'rent': rent*(1-sens/100),
-           'loan': loan*(1-sens/100), 'closing': closing*(1-sens/100)}
-r_up   = full_analysis(p_up)
-r_down = full_analysis(p_down)
-
-# ── HEADER ────────────────────────────────────────────────────
-col_h1, col_h2 = st.columns([3, 1])
-with col_h1:
-    st.markdown(f'<div class="page-title">PropIQ</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="page-sub">Investment Analysis — <strong>{project_name}</strong></div>',
-                unsafe_allow_html=True)
-with col_h2:
-    # Quick verdict
-    if r['annual_cf'] > 0 and r['dscr'] >= 1.25 and r['cap_rate'] >= 5:
-        verdict_html = '<span class="badge badge-green">✅ STRONG BUY</span>'
-    elif r['annual_cf'] > 0 and r['dscr'] >= 1.0:
-        verdict_html = '<span class="badge badge-gold">⚡ CONSIDER</span>'
-    else:
-        verdict_html = '<span class="badge badge-red">⚠️ CAUTION</span>'
-    st.markdown(f'<div style="text-align:right;padding-top:20px">{verdict_html}</div>',
-                unsafe_allow_html=True)
-    st.markdown(f'<div style="text-align:right;font-size:12px;color:#6B7A99;margin-top:6px">'
-                f'DSCR: {r["dscr"]:.2f} · Cap: {r["cap_rate"]:.1f}%</div>',
-                unsafe_allow_html=True)
-
-# ── KPI CARDS ROW 1 ───────────────────────────────────────────
-cf_class = "positive" if r['monthly_cf'] >= 0 else "negative"
-coc_class = "positive" if r['coc'] >= 0 else "negative"
-
-st.markdown(f"""
-<div class="kpi-row">
-  <div class="kpi-card">
-    <div class="kpi-icon">💵</div>
-    <div class="kpi-label">Monthly Cash Flow</div>
-    <div class="kpi-value {cf_class}">${r['monthly_cf']:,.0f}</div>
-    <div class="kpi-sub">Annual: ${r['annual_cf']:,.0f}</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-icon">📈</div>
-    <div class="kpi-label">Cap Rate</div>
-    <div class="kpi-value">{r['cap_rate']:.2f}%</div>
-    <div class="kpi-sub">Gross Yield: {r['gross_yield']:.2f}%</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-icon">💰</div>
-    <div class="kpi-label">Cash-on-Cash</div>
-    <div class="kpi-value {coc_class}">{r['coc']:.2f}%</div>
-    <div class="kpi-sub">On ${r['cash_required']:,.0f} invested</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-icon">🏦</div>
-    <div class="kpi-label">DSCR</div>
-    <div class="kpi-value {'positive' if r['dscr']>=1.25 else 'negative' if r['dscr']<1 else ''}">{r['dscr']:.2f}</div>
-    <div class="kpi-sub">Min 1.25x for lenders</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-icon">📊</div>
-    <div class="kpi-label">Mortgage Payment</div>
-    <div class="kpi-value">${r['payment']:,.0f}</div>
-    <div class="kpi-sub">P&I Monthly</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-icon">🎯</div>
-    <div class="kpi-label">Max Purchase Price</div>
-    <div class="kpi-value">${r['max_price']:,.0f}</div>
-    <div class="kpi-sub">Min $100/mo cash flow</div>
-  </div>
-</div>
-""", unsafe_allow_html=True)
-
-# ── KPI CARDS ROW 2 ───────────────────────────────────────────
-arv_equity = arv - price - repair
-equity_mult = arv / (price + repair) if (price + repair) > 0 else 0
-
-st.markdown(f"""
-<div class="kpi-row">
-  <div class="kpi-card">
-    <div class="kpi-icon">🏗️</div>
-    <div class="kpi-label">GRM</div>
-    <div class="kpi-value">{r['grm']:.1f}x</div>
-    <div class="kpi-sub">Gross Rent Multiplier</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-icon">📉</div>
-    <div class="kpi-label">LTV</div>
-    <div class="kpi-value">{r['ltv']:.1f}%</div>
-    <div class="kpi-sub">Loan-to-Value</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-icon">🏠</div>
-    <div class="kpi-label">Down Payment</div>
-    <div class="kpi-value">${r['down_payment']:,.0f}</div>
-    <div class="kpi-sub">+ ${closing:,.0f} closing costs</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-icon">⚡</div>
-    <div class="kpi-label">ARV Equity</div>
-    <div class="kpi-value {'positive' if arv_equity>0 else 'negative'}">${arv_equity:,.0f}</div>
-    <div class="kpi-sub">ARV − Price − Repairs</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-icon">🔑</div>
-    <div class="kpi-label">Breakeven Occupancy</div>
-    <div class="kpi-value">{r['breakeven_occ']:.1f}%</div>
-    <div class="kpi-sub">Min occ. to cover loan</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-icon">💎</div>
-    <div class="kpi-label">Total Interest Paid</div>
-    <div class="kpi-value">${r['total_interest']/1000:.0f}K</div>
-    <div class="kpi-sub">Over {term//12} years</div>
-  </div>
-</div>
-""", unsafe_allow_html=True)
-
-# ── TABS ──────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "📊 Cash Flow", "🔄 Sensitivity", "📅 Amortization",
-    "📈 Projections", "🏗️ Deal Analyzer", "📋 Full Report"
-])
-
-# ════════════════════════════════════════════════════════════
-# TAB 1 — CASH FLOW
-# ════════════════════════════════════════════════════════════
-with tab1:
-    st.markdown('<div class="section-title">💵 <span>Monthly Income & Expense Breakdown</span></div>',
-                unsafe_allow_html=True)
-
-    eff_rent  = rent * (1 - vacancy/100)
-    maint_amt = eff_rent * maint/100
-    mgmt_amt  = eff_rent * mgmt/100
-    tax_amt   = eff_rent * tax/100
-    ins_amt   = eff_rent * ins/100
-    total_exp = maint_amt + mgmt_amt + tax_amt + ins_amt
-    monthly_noi = eff_rent - total_exp
-    monthly_cf_v = monthly_noi - r['payment']
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        # Waterfall chart
-        categories = ['Gross Rent', 'Vacancy Loss', 'Maintenance', 'Mgmt Fee',
-                      'Property Tax', 'Insurance', 'Debt Service', 'Net Cash Flow']
-        values = [rent, -(rent - eff_rent), -maint_amt, -mgmt_amt,
-                  -tax_amt, -ins_amt, -r['payment'], monthly_cf_v]
-        colors_wf = [COLORS['gold'] if v > 0 else COLORS['red'] for v in values]
-        colors_wf[-1] = COLORS['green'] if monthly_cf_v >= 0 else COLORS['red']
-
-        fig_wf = go.Figure(go.Waterfall(
-            orientation='v',
-            measure=['absolute'] + ['relative']*6 + ['total'],
-            x=categories,
-            y=values,
-            connector=dict(line=dict(color='#2A3347', width=1)),
-            increasing=dict(marker_color=COLORS['gold']),
-            decreasing=dict(marker_color=COLORS['red']),
-            totals=dict(marker_color=COLORS['green'] if monthly_cf_v >= 0 else COLORS['red']),
-            text=[f'${v:,.0f}' for v in values],
-            textposition='outside',
-            textfont=dict(color='#E8EAF0', size=10),
-        ))
-        fig_wf.update_layout(**PLOT_LAYOUT, title='Monthly Cash Flow Waterfall', height=380,
-                             title_font=dict(color='#E8EAF0', size=14))
-        st.plotly_chart(fig_wf, use_container_width=True)
-
-    with col2:
-        # Expense donut
-        exp_labels = ['Vacancy', 'Maintenance', 'Mgmt Fee', 'Property Tax', 'Insurance', 'Debt Service']
-        exp_values = [rent - eff_rent, maint_amt, mgmt_amt, tax_amt, ins_amt, r['payment']]
-        exp_colors = [COLORS['orange'], COLORS['blue'], COLORS['purple'],
-                      COLORS['teal'], COLORS['gold'], COLORS['red']]
-
-        fig_donut = go.Figure(go.Pie(
-            labels=exp_labels, values=exp_values,
-            hole=0.6, marker_colors=exp_colors,
-            textinfo='percent', textfont=dict(size=11, color='#E8EAF0'),
-            hovertemplate='%{label}<br>$%{value:,.2f}<extra></extra>'
-        ))
-        fig_donut.add_annotation(
-            text=f'${rent:,.0f}<br><span style="font-size:10px">Gross/mo</span>',
-            x=0.5, y=0.5, font_size=16, font_color='#E8EAF0', showarrow=False
-        )
-        fig_donut.update_layout(**PLOT_LAYOUT, title='Monthly Expense Breakdown',
-                                height=380, title_font=dict(color='#E8EAF0', size=14),
-                                showlegend=True)
-        st.plotly_chart(fig_donut, use_container_width=True)
-
-    # Detailed income statement
-    st.markdown('<div class="section-title">📋 <span>Pro Forma Income Statement</span></div>',
-                unsafe_allow_html=True)
-    items = [
-        ('Gross Scheduled Rent',       rent,       rent*12),
-        ('Less: Vacancy Loss',         -(rent-eff_rent), -(rent-eff_rent)*12),
-        ('Effective Gross Income',     eff_rent,   eff_rent*12),
-        ('',                           '',          ''),
-        ('Less: Maintenance',          -maint_amt, -maint_amt*12),
-        ('Less: Management Fee',       -mgmt_amt,  -mgmt_amt*12),
-        ('Less: Property Tax',         -tax_amt,   -tax_amt*12),
-        ('Less: Insurance',            -ins_amt,   -ins_amt*12),
-        ('Net Operating Income (NOI)', monthly_noi, monthly_noi*12),
-        ('',                           '',          ''),
-        ('Less: Debt Service (P&I)',   -r['payment'], -r['annual_debt']),
-        ('NET CASH FLOW',              monthly_cf_v, r['annual_cf']),
-    ]
-    rows_data = []
-    for item, mo, yr in items:
-        if item == '':
-            rows_data.append({'Item': '─' * 40, 'Monthly': '', 'Annual': ''})
-        else:
-            rows_data.append({
-                'Item': item,
-                'Monthly': f"${mo:,.2f}" if isinstance(mo, float) else '',
-                'Annual':  f"${yr:,.2f}" if isinstance(yr, float) else '',
-            })
-    df_stmt = pd.DataFrame(rows_data)
-    st.dataframe(df_stmt, use_container_width=True, hide_index=True, height=420)
-
-# ════════════════════════════════════════════════════════════
-# TAB 2 — SENSITIVITY
-# ════════════════════════════════════════════════════════════
-with tab2:
-    st.markdown('<div class="section-title">🔄 <span>Sensitivity Analysis</span></div>',
-                unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        scenarios = ['Base Case', f'+{sens:.0f}% Stress', f'-{sens:.0f}% Upside']
-        metrics_s = {
-            'Cash-on-Cash (%)':  [r['coc'],    r_up['coc'],    r_down['coc']],
-            'Cap Rate (%)':      [r['cap_rate'],r_up['cap_rate'],r_down['cap_rate']],
-            'Annual CF ($K)':    [r['annual_cf']/1e3, r_up['annual_cf']/1e3, r_down['annual_cf']/1e3],
-            'DSCR':              [r['dscr'],   r_up['dscr'],   r_down['dscr']],
-        }
-        bar_colors = [COLORS['gold'], COLORS['red'], COLORS['green']]
-        fig_sens = go.Figure()
-        for i, (scenario, color) in enumerate(zip(scenarios, bar_colors)):
-            fig_sens.add_trace(go.Bar(
-                name=scenario, x=list(metrics_s.keys()),
-                y=[v[i] for v in metrics_s.values()],
-                marker_color=color, opacity=0.85,
-                text=[f'{v[i]:.2f}' for v in metrics_s.values()],
-                textposition='outside', textfont=dict(color='#E8EAF0', size=10)
-            ))
-        fig_sens.update_layout(**PLOT_LAYOUT, title='Key Metrics by Scenario',
-                               barmode='group', height=380,
-                               title_font=dict(color='#E8EAF0', size=14))
-        st.plotly_chart(fig_sens, use_container_width=True)
-
-    with col2:
-        # Sensitivity heatmap — cap rate vs vacancy
-        vacancy_range = np.arange(0, 25, 2.5)
-        rate_range    = np.arange(5.0, 10.5, 0.5)
-        heat_data = []
-        for v in vacancy_range:
-            row_data = []
-            for rt in rate_range:
-                pp = {**p, 'vacancy': v, 'rate': rt}
-                rr = full_analysis(pp)
-                row_data.append(round(rr['cap_rate'], 2))
-            heat_data.append(row_data)
-
-        fig_heat = go.Figure(go.Heatmap(
-            z=heat_data,
-            x=[f'{rt:.1f}%' for rt in rate_range],
-            y=[f'{v:.1f}%' for v in vacancy_range],
-            colorscale=[[0,'#E74C3C'],[0.5,'#C9A84C'],[1,'#2ECC71']],
-            text=[[f'{v:.1f}%' for v in row] for row in heat_data],
-            texttemplate='%{text}', textfont=dict(size=9),
-            hovertemplate='Rate: %{x}<br>Vacancy: %{y}<br>Cap Rate: %{z:.2f}%<extra></extra>'
-        ))
-        fig_heat.update_layout(**PLOT_LAYOUT,
-                               title='Cap Rate Heatmap (Interest Rate vs Vacancy)',
-                               height=380, title_font=dict(color='#E8EAF0', size=14),
-                               xaxis_title='Interest Rate', yaxis_title='Vacancy Rate')
-        st.plotly_chart(fig_heat, use_container_width=True)
-
-    # Sensitivity table
-    st.markdown("#### Scenario Comparison Table")
-    sens_df = pd.DataFrame({
-        'Metric': ['Monthly Cash Flow', 'Annual Cash Flow', 'Cap Rate', 'Cash-on-Cash', 'DSCR', 'Monthly Payment'],
-        f'Base Case': [f"${r['monthly_cf']:,.0f}", f"${r['annual_cf']:,.0f}", f"{r['cap_rate']:.2f}%", f"{r['coc']:.2f}%", f"{r['dscr']:.2f}", f"${r['payment']:,.0f}"],
-        f'+{sens:.0f}% Stress': [f"${r_up['monthly_cf']:,.0f}", f"${r_up['annual_cf']:,.0f}", f"{r_up['cap_rate']:.2f}%", f"{r_up['coc']:.2f}%", f"{r_up['dscr']:.2f}", f"${r_up['payment']:,.0f}"],
-        f'-{sens:.0f}% Upside': [f"${r_down['monthly_cf']:,.0f}", f"${r_down['annual_cf']:,.0f}", f"{r_down['cap_rate']:.2f}%", f"{r_down['coc']:.2f}%", f"{r_down['dscr']:.2f}", f"${r_down['payment']:,.0f}"],
-    })
-    st.dataframe(sens_df, use_container_width=True, hide_index=True)
-
-# ════════════════════════════════════════════════════════════
-# TAB 3 — AMORTIZATION
-# ════════════════════════════════════════════════════════════
-with tab3:
-    st.markdown('<div class="section-title">📅 <span>Amortization Schedule</span></div>',
-                unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        fig_am = go.Figure()
-        fig_am.add_trace(go.Scatter(x=am['Month'], y=am['Payment'],  name='Total Payment',
-                                    line=dict(color=COLORS['gold'], width=2.5)))
-        fig_am.add_trace(go.Scatter(x=am['Month'], y=am['Principal'], name='Principal',
-                                    line=dict(color=COLORS['green'], width=2)))
-        fig_am.add_trace(go.Scatter(x=am['Month'], y=am['Interest'],  name='Interest',
-                                    line=dict(color=COLORS['red'], width=2)))
-        fig_am.update_layout(**PLOT_LAYOUT, title='Payment Breakdown Over Time',
-                             height=360, title_font=dict(color='#E8EAF0', size=14),
-                             yaxis_tickprefix='$', yaxis_tickformat=',.0f')
-        st.plotly_chart(fig_am, use_container_width=True)
-
-    with col2:
-        fig_eq = go.Figure()
-        fig_eq.add_trace(go.Scatter(x=am['Month'], y=am['Balance'],
-                                    fill='tozeroy', fillcolor='rgba(201,168,76,0.12)',
-                                    line=dict(color=COLORS['gold'], width=2), name='Loan Balance'))
-        fig_eq.add_trace(go.Scatter(x=am['Month'], y=am['Equity'],
-                                    fill='tozeroy', fillcolor='rgba(46,204,113,0.12)',
-                                    line=dict(color=COLORS['green'], width=2), name='Equity Built'))
-        fig_eq.update_layout(**PLOT_LAYOUT, title='Balance vs Equity Over Time',
-                             height=360, title_font=dict(color='#E8EAF0', size=14),
-                             yaxis_tickprefix='$', yaxis_tickformat=',.0f')
-        st.plotly_chart(fig_eq, use_container_width=True)
-
-    # Stats
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Monthly Payment", f"${r['payment']:,.2f}")
-    col2.metric("Total Paid", f"${r['total_payments']:,.0f}")
-    col3.metric("Total Interest", f"${r['total_interest']:,.0f}")
-    col4.metric("Equity at Year 5", f"${am[am['Month']==60]['Equity'].values[0]:,.0f}" if len(am) >= 60 else "N/A")
-
-    st.markdown("#### Full Amortization Table")
-    am_display = am.copy()
-    for col in ['Payment','Principal','Interest','Balance','Cumul. Interest','Equity']:
-        am_display[col] = am_display[col].apply(lambda x: f"${x:,.2f}")
-    st.dataframe(am_display, use_container_width=True, hide_index=True, height=450)
-
-# ════════════════════════════════════════════════════════════
-# TAB 4 — PROJECTIONS
-# ════════════════════════════════════════════════════════════
-with tab4:
-    st.markdown('<div class="section-title">📈 <span>Investment Projections</span></div>',
-                unsafe_allow_html=True)
-
-    years       = list(range(1, hold_yrs + 1))
-    prop_values = [price * (1 + app_rate/100)**y for y in years]
-    rents_proj  = [rent * (1 + rent_gr/100)**y for y in years]
-    equity_proj = []
-    cfs_proj    = []
-    coc_proj    = []
-
-    for y in years:
-        bal_row = am[am['Month'] == y*12]
-        bal = float(bal_row['Balance'].values[0]) if not bal_row.empty else 0
-        eq  = prop_values[y-1] - bal
-        equity_proj.append(eq)
-
-        r_rent = rents_proj[y-1]
-        pp_y   = {**p, 'rent': r_rent}
-        ry     = full_analysis(pp_y)
-        cfs_proj.append(ry['annual_cf'])
-        coc_proj.append(ry['coc'])
-
-    # Appreciation chart
-    col1, col2 = st.columns(2)
-    with col1:
-        fig_proj = go.Figure()
-        fig_proj.add_trace(go.Scatter(x=years, y=prop_values,
-                                      line=dict(color=COLORS['gold'], width=2.5),
-                                      fill='tozeroy', fillcolor='rgba(201,168,76,0.08)',
-                                      name='Property Value'))
-        fig_proj.add_trace(go.Scatter(x=years, y=equity_proj,
-                                      line=dict(color=COLORS['green'], width=2.5),
-                                      fill='tozeroy', fillcolor='rgba(46,204,113,0.08)',
-                                      name='Total Equity'))
-        fig_proj.add_hline(y=price, line=dict(color='#6B7A99', dash='dash', width=1),
-                           annotation_text='Purchase Price', annotation_font_color='#6B7A99')
-        fig_proj.update_layout(**PLOT_LAYOUT, title=f'Property Value & Equity ({app_rate}% appreciation/yr)',
-                               height=360, title_font=dict(color='#E8EAF0', size=14),
-                               yaxis_tickprefix='$', yaxis_tickformat=',.0f',
-                               xaxis_title='Year')
-        st.plotly_chart(fig_proj, use_container_width=True)
-
-    with col2:
-        fig_cf = go.Figure()
-        bar_cols = [COLORS['green'] if v >= 0 else COLORS['red'] for v in cfs_proj]
-        fig_cf.add_trace(go.Bar(x=years, y=cfs_proj, marker_color=bar_cols,
-                                name='Annual Cash Flow',
-                                text=[f'${v:,.0f}' for v in cfs_proj],
-                                textposition='outside', textfont=dict(color='#E8EAF0', size=9)))
-        fig_cf.update_layout(**PLOT_LAYOUT, title=f'Annual Cash Flow ({rent_gr}% rent growth/yr)',
-                             height=360, title_font=dict(color='#E8EAF0', size=14),
-                             yaxis_tickprefix='$', yaxis_tickformat=',.0f',
-                             xaxis_title='Year')
-        st.plotly_chart(fig_cf, use_container_width=True)
-
-    # Total return at exit
-    exit_price      = prop_values[-1]
-    exit_balance    = float(am[am['Month'] == hold_yrs*12]['Balance'].values[0]) if hold_yrs*12 <= term else 0
-    sale_proceeds   = exit_price * 0.94  # assume 6% selling costs
-    equity_at_exit  = sale_proceeds - exit_balance
-    total_cf        = sum(cfs_proj)
-    total_return    = equity_at_exit - r['cash_required'] + total_cf
-    roi             = (total_return / r['cash_required']) * 100 if r['cash_required'] > 0 else 0
-    annualized_roi  = ((1 + roi/100)**(1/hold_yrs) - 1) * 100 if hold_yrs > 0 else 0
-
-    st.markdown(f'<div class="section-title">🎯 <span>Exit Analysis — Year {hold_yrs}</span></div>',
-                unsafe_allow_html=True)
-    c1,c2,c3,c4,c5 = st.columns(5)
-    c1.metric("Exit Property Value",  f"${exit_price:,.0f}")
-    c2.metric("Sale Proceeds (net)",  f"${sale_proceeds:,.0f}", delta="-6% selling costs")
-    c3.metric("Equity at Exit",       f"${equity_at_exit:,.0f}")
-    c4.metric("Total Cash Flow",      f"${total_cf:,.0f}")
-    c5.metric("Annualized ROI",       f"{annualized_roi:.1f}%")
-
-# ════════════════════════════════════════════════════════════
-# TAB 5 — DEAL ANALYZER
-# ════════════════════════════════════════════════════════════
-with tab5:
-    st.markdown('<div class="section-title">🏗️ <span>Deal Analyzer & Quick Checks</span></div>',
-                unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("#### 🧪 Rule-of-Thumb Checks")
-
-        checks = [
-            ("1% Rule", rent / price * 100 >= 1.0,
-             f"Rent/Price = {rent/price*100:.2f}% (target ≥ 1.0%)",
-             f"Monthly rent should be ≥ 1% of purchase price. Yours: ${rent:,.0f} / ${price:,.0f}"),
-            ("50% Rule", (rent * 0.5) > r['payment'],
-             f"50% expenses = ${rent*0.5:,.0f}, Payment = ${r['payment']:,.0f}",
-             "50% of gross rent should cover all expenses (excl. debt service)"),
-            ("DSCR ≥ 1.25", r['dscr'] >= 1.25,
-             f"DSCR = {r['dscr']:.2f} (lenders require ≥ 1.25)",
-             "Debt Service Coverage Ratio — NOI / Annual Debt Service"),
-            ("Positive Cash Flow", r['monthly_cf'] > 0,
-             f"Monthly CF = ${r['monthly_cf']:,.0f}",
-             "Property generates positive cash flow after all expenses"),
-            ("Cap Rate ≥ 5%", r['cap_rate'] >= 5.0,
-             f"Cap Rate = {r['cap_rate']:.2f}% (target ≥ 5%)",
-             "Net Operating Income / Purchase Price"),
-            ("GRM < 15", r['grm'] < 15,
-             f"GRM = {r['grm']:.1f}x (target < 15x)",
-             "Gross Rent Multiplier — lower is better"),
-            ("LTV ≤ 80%", r['ltv'] <= 80,
-             f"LTV = {r['ltv']:.1f}% (target ≤ 80%)",
-             "Loan-to-Value ratio"),
-            ("70% Rule (Flip)", (price + repair) <= arv * 0.70,
-             f"(Price + Repairs) = ${price+repair:,.0f}, 70% ARV = ${arv*0.7:,.0f}",
-             "Max buy price for a flip = 70% of ARV minus repairs"),
+# ── Strategies ────────────────────────────────────────────────────────────────
+STRATEGIES = {
+    "Liquidity Sweep": {
+        "short": "SWEEP", "color": "#FF6B1A", "icon": "L",
+        "description": "Smart Money Concept",
+        "rules": [
+            "Price raids equal highs/lows (buy-side or sell-side liquidity)",
+            "Engineered liquidity: market makers hunt stops above swing highs",
+            "Entry after sweep + reversal candle + retest of swept level",
+            "Target: next imbalance or fair value gap (FVG)",
+            "Invalidation: candle closes beyond the swept level",
+            "1M: ultra-scalp | 5M: scalp | 10M: intraday swing"
         ]
-        for name, passed, detail, tooltip in checks:
-            icon = "✅" if passed else "❌"
-            col = "#2ECC71" if passed else "#E74C3C"
-            st.markdown(f"""
-            <div style="background:#1C2333;border:1px solid {'#2A4A3A' if passed else '#4A2A2A'};
-                         border-left:3px solid {col};
-                         border-radius:8px;padding:10px 14px;margin-bottom:8px">
-              <div style="display:flex;justify-content:space-between;align-items:center">
-                <span style="font-weight:600;color:#E8EAF0">{icon} {name}</span>
-                <span class="badge {'badge-green' if passed else 'badge-red'}">{'PASS' if passed else 'FAIL'}</span>
-              </div>
-              <div style="font-size:12px;color:#6B7A99;margin-top:4px;font-family:'DM Mono',monospace">{detail}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    with col2:
-        st.markdown("#### 📊 Comparable Metrics")
-
-        # Spider/Radar chart of deal quality
-        categories_radar = ['Cap Rate', '1% Rule', 'Cash Flow', 'DSCR', 'LTV (inv)', 'CoC Return']
-        score_raw = [
-            min(r['cap_rate'] / 10 * 100, 100),
-            min(rent / price * 100 / 1.0 * 100, 100),
-            min(max(r['monthly_cf'] / 500 * 100, 0), 100),
-            min(r['dscr'] / 1.5 * 100, 100),
-            min((100 - r['ltv']) / 30 * 100, 100),
-            min(max(r['coc'] / 12 * 100, 0), 100),
+    },
+    "AMD Model": {
+        "short": "AMD", "color": "#B388FF", "icon": "A",
+        "description": "Accumulation · Manipulation · Distribution",
+        "rules": [
+            "Accumulation: price coils in a range — smart money loads positions",
+            "Manipulation: false break of range (stop hunt)",
+            "Distribution: price moves in the true intended direction",
+            "Entry after M → D confirmation with displacement candle",
+            "1M: micro AMD cycle | 5M: session AMD | 10M: macro daily AMD",
+            "Valid across all sessions: London, NY, Asia"
         ]
-        fig_radar = go.Figure(go.Scatterpolar(
-            r=score_raw + [score_raw[0]],
-            theta=categories_radar + [categories_radar[0]],
-            fill='toself', fillcolor='rgba(201,168,76,0.15)',
-            line=dict(color=COLORS['gold'], width=2),
-            name='Your Deal'
-        ))
-        fig_radar.update_layout(
-            **{k: v for k, v in PLOT_LAYOUT.items() if k != 'xaxis' and k != 'yaxis'},
-            polar=dict(
-                bgcolor='rgba(28,35,51,0.6)',
-                radialaxis=dict(visible=True, range=[0, 100],
-                               gridcolor='#2A3347', tickfont=dict(color='#6B7A99', size=9)),
-                angularaxis=dict(gridcolor='#2A3347', tickfont=dict(color='#E8EAF0', size=10))
-            ),
-            title='Deal Quality Score', height=380,
-            title_font=dict(color='#E8EAF0', size=14),
-            showlegend=False
-        )
-        st.plotly_chart(fig_radar, use_container_width=True)
-
-        # Overall score
-        overall = int(sum(score_raw) / len(score_raw))
-        score_col = '#2ECC71' if overall >= 70 else '#C9A84C' if overall >= 50 else '#E74C3C'
-        score_label = 'Strong Deal' if overall >= 70 else 'Average Deal' if overall >= 50 else 'Weak Deal'
-        st.markdown(f"""
-        <div style="background:#1C2333;border:1px solid #2A3347;border-radius:12px;
-                    padding:20px;text-align:center;margin-top:8px">
-          <div style="font-size:13px;color:#6B7A99;text-transform:uppercase;letter-spacing:1px">
-            Overall Deal Score
-          </div>
-          <div style="font-family:'DM Serif Display',serif;font-size:52px;color:{score_col};line-height:1.1">
-            {overall}
-          </div>
-          <div style="font-size:14px;color:{score_col};font-weight:600">{score_label}</div>
-          <div style="font-size:11px;color:#6B7A99;margin-top:4px">out of 100</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-# ════════════════════════════════════════════════════════════
-# TAB 6 — FULL REPORT
-# ════════════════════════════════════════════════════════════
-with tab6:
-    st.markdown('<div class="section-title">📋 <span>Full Investment Report</span></div>',
-                unsafe_allow_html=True)
-    st.markdown(f"*Generated for: **{project_name}***")
-
-    report_data = {
-        'Category': [
-            '── PROPERTY ──', 'Purchase Price', 'After Repair Value', 'Repair Costs',
-            'ARV Equity', 'Closing Costs', '',
-            '── FINANCING ──', 'Loan Amount', 'Down Payment', 'Interest Rate',
-            'Loan Term', 'LTV', 'Monthly Payment (P&I)', 'Total Payments', 'Total Interest Paid', '',
-            '── INCOME ──', 'Monthly Gross Rent', 'Annual Gross Rent',
-            'Vacancy Loss (monthly)', 'Effective Gross Income (monthly)', '',
-            '── EXPENSES ──', 'Maintenance (monthly)', 'Mgmt Fee (monthly)',
-            'Property Tax (monthly)', 'Insurance (monthly)', 'Total Op. Expenses (monthly)', '',
-            '── RETURNS ──', 'Monthly NOI', 'Annual NOI',
-            'Monthly Cash Flow', 'Annual Cash Flow',
-            'Cap Rate', 'Cash-on-Cash Return', 'Gross Rental Yield',
-            'DSCR', 'GRM', 'Breakeven Occupancy', 'Max Purchase Price', '',
-            '── EXIT (YEAR {} ) ──'.format(hold_yrs),
-            'Projected Exit Value', 'Equity at Exit', 'Total Cumulative CF', 'Annualized ROI',
-        ],
-        'Value': [
-            '', f"${price:,.0f}", f"${arv:,.0f}", f"${repair:,.0f}",
-            f"${arv_equity:,.0f}", f"${closing:,.0f}", '',
-            '', f"${loan:,.0f}", f"${r['down_payment']:,.0f}", f"{rate:.3f}%",
-            f"{term} months ({term//12} yrs)", f"{r['ltv']:.1f}%",
-            f"${r['payment']:,.2f}", f"${r['total_payments']:,.0f}", f"${r['total_interest']:,.0f}", '',
-            '', f"${rent:,.0f}", f"${rent*12:,.0f}",
-            f"${(rent - rent*(1-vacancy/100)):,.2f}", f"${rent*(1-vacancy/100):,.2f}", '',
-            '', f"${maint_amt:,.2f}", f"${mgmt_amt:,.2f}",
-            f"${tax_amt:,.2f}", f"${ins_amt:,.2f}", f"${total_exp:,.2f}", '',
-            '', f"${monthly_noi:,.2f}", f"${r['noi']:,.2f}",
-            f"${r['monthly_cf']:,.2f}", f"${r['annual_cf']:,.2f}",
-            f"{r['cap_rate']:.2f}%", f"{r['coc']:.2f}%", f"{r['gross_yield']:.2f}%",
-            f"{r['dscr']:.2f}x", f"{r['grm']:.1f}x",
-            f"{r['breakeven_occ']:.1f}%", f"${r['max_price']:,.0f}", '',
-            '',
-            f"${exit_price:,.0f}", f"${equity_at_exit:,.0f}",
-            f"${total_cf:,.0f}", f"{annualized_roi:.1f}%",
+    },
+    "Order Flow": {
+        "short": "FLOW", "color": "#00B0FF", "icon": "F",
+        "description": "Institutional Flow Analysis",
+        "rules": [
+            "Track delta: bid vs ask volume imbalance in each candle",
+            "Absorption: large volume but small candle body = trapped longs/shorts",
+            "Volume imbalance creates unfilled orders (price magnets)",
+            "Footprint: cluster of high delta bars = institutional entry",
+            "Divergence: price makes new high but delta fails = reversal signal",
+            "Confirm with depth of market (DOM) stacking near key levels"
+        ]
+    },
+    "Impulse Trend": {
+        "short": "IMPULSE", "color": "#00E676", "icon": "I",
+        "description": "BosWaves · TradingView Style",
+        "rules": [
+            "Identifies impulsive moves + corrective pullbacks (Elliott-style)",
+            "BosWaves: Break of Structure signals trend continuation",
+            "Entry: pullback to impulse origin with momentum confirmation",
+            "Trend filter: EMA 21/50/200 alignment on higher TF",
+            "Exit: next BOS level or 2R target",
+            "Works best on 5M and 10M; 1M = noise filter required"
+        ]
+    },
+    "GS Screener": {
+        "short": "SCREENER", "color": "#FFD600", "icon": "G",
+        "description": "Goldman Sachs Framework",
+        "rules": [
+            "P/E vs sector average + revenue growth 5Y trend",
+            "Debt-to-equity health check + dividend sustainability",
+            "Competitive moat: weak / moderate / strong",
+            "Bull/bear price targets for 12-month horizon",
+            "Risk rating 1-10 + entry price zones",
+            "Stop-loss based on ATR × 1.5 below structure"
         ]
     }
-    df_report = pd.DataFrame(report_data)
-    st.dataframe(df_report, use_container_width=True, hide_index=True, height=900)
+}
 
-    # Download
-    csv = df_report.to_csv(index=False)
-    st.download_button(
-        label="⬇️ Download Full Report (CSV)",
-        data=csv,
-        file_name=f"{project_name.replace(' ','_')}_PropIQ_Report.csv",
-        mime='text/csv'
+BASE_PRICES = {
+    "SPY": 562, "QQQ": 478, "AAPL": 221, "TSLA": 268,
+    "NVDA": 880, "AMZN": 207, "MSFT": 415, "META": 577,
+    "GOOGL": 175, "AMD": 145, "GLD": 210, "BTC": 85000
+}
+
+# ── Data & Indicator Functions ────────────────────────────────────────────────
+def generate_candles(base_price, tf_minutes, count):
+    rng = np.random.default_rng(int(datetime.now().timestamp()) % 9999)
+    vol = base_price * {1: 0.0008, 5: 0.0018, 10: 0.003}.get(tf_minutes, 0.002)
+    bias = (rng.random() - 0.48) * 0.3
+    dates = [datetime.now() - timedelta(minutes=tf_minutes * (count - i)) for i in range(count)]
+    rows, price = [], base_price
+    for _ in range(count):
+        r = vol * (0.5 + rng.random() * 1.5)
+        d = 1 if rng.random() > 0.5 - bias else -1
+        o = price
+        c = round(o + d * r * (0.3 + rng.random() * 0.7), 2)
+        h = round(max(o, c) + rng.random() * r * 0.5, 2)
+        l = round(min(o, c) - rng.random() * r * 0.5, 2)
+        v = int(50000 + rng.random() * 200000)
+        rows.append({"open": o, "high": h, "low": l, "close": c, "volume": v})
+        price = c
+        if rng.random() < 0.04:
+            price += d * vol * 2
+    return pd.DataFrame(rows, index=pd.DatetimeIndex(dates))
+
+def calc_rsi(closes, p=14):
+    s = pd.Series(closes)
+    d = s.diff()
+    g = d.where(d > 0, 0).rolling(p).mean()
+    ls = (-d.where(d < 0, 0)).rolling(p).mean()
+    v = (100 - (100 / (1 + g / ls))).iloc[-1]
+    return round(v, 1) if not np.isnan(v) else 50.0
+
+def calc_macd(closes):
+    s = pd.Series(closes)
+    v = (s.ewm(span=12).mean() - s.ewm(span=26).mean()).iloc[-1]
+    return round(v, 3)
+
+def calc_bb_pct(closes, p=20):
+    s = pd.Series(closes)
+    mid = s.rolling(p).mean()
+    std = s.rolling(p).std()
+    pct = ((s - (mid - 2 * std)) / (4 * std)).iloc[-1]
+    return round(pct, 2) if not np.isnan(pct) else 0.5
+
+def calc_vol_ratio(volumes):
+    s = pd.Series(volumes)
+    r = s.iloc[-1] / s.rolling(20).mean().iloc[-1]
+    return round(r, 2) if not np.isnan(r) else 1.0
+
+def get_markers(df, strategy):
+    buy_x, buy_y, sell_x, sell_y = [], [], [], []
+    rng = np.random.default_rng(42)
+    for i in range(5, len(df) - 5):
+        c = df.iloc[i]
+        prev_lo = df["low"].iloc[i-3:i].min()
+        prev_hi = df["high"].iloc[i-3:i].max()
+        if strategy in ("Liquidity Sweep", "AMD Model"):
+            if c["low"] < prev_lo and c["close"] > prev_lo and rng.random() < 0.3:
+                buy_x.append(df.index[i]); buy_y.append(c["low"] * 0.9993)
+            if c["high"] > prev_hi and c["close"] < prev_hi and rng.random() < 0.25:
+                sell_x.append(df.index[i]); sell_y.append(c["high"] * 1.0007)
+        elif strategy == "Order Flow":
+            if c["volume"] > 150000 and c["close"] > c["open"] and rng.random() < 0.35:
+                buy_x.append(df.index[i]); buy_y.append(c["low"] * 0.9993)
+        elif strategy == "Impulse Trend":
+            if i % 8 == 0 and c["close"] > c["open"]:
+                buy_x.append(df.index[i]); buy_y.append(c["low"] * 0.9993)
+        elif strategy == "GS Screener":
+            if i % 12 == 0:
+                buy_x.append(df.index[i]); buy_y.append(c["low"] * 0.9993)
+    return buy_x, buy_y, sell_x, sell_y
+
+# ── Chart Builder ─────────────────────────────────────────────────────────────
+def build_chart(df, strategy):
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        row_heights=[0.78, 0.22], vertical_spacing=0.02)
+    fig.add_trace(go.Candlestick(
+        x=df.index, open=df["open"], high=df["high"], low=df["low"], close=df["close"],
+        increasing=dict(line=dict(color="#00E676", width=1), fillcolor="#00E676"),
+        decreasing=dict(line=dict(color="#FF1744", width=1), fillcolor="#FF1744"),
+        name="PRICE", showlegend=False
+    ), row=1, col=1)
+    vol_colors = ["#00E67633" if c > o else "#FF174433"
+                  for c, o in zip(df["close"], df["open"])]
+    fig.add_trace(go.Bar(x=df.index, y=df["volume"], marker_color=vol_colors,
+                         name="VOLUME", showlegend=False), row=2, col=1)
+    hi, lo = df["high"].max(), df["low"].min()
+    r = hi - lo
+    for price, color, lbl in [(hi, "#FF6B1A66", "HIGH"), (lo, "#00E67666", "LOW"), ((hi+lo)/2, "#8A8AB055", "MID")]:
+        fig.add_hline(y=price, line_color=color, line_dash="dash", line_width=1,
+                      annotation_text=f" {lbl}", annotation_font_color=color,
+                      annotation_font_size=9, row=1, col=1)
+    if strategy == "Liquidity Sweep":
+        for p, lbl in [(hi - r * 0.1, "LIQ ↑"), (lo + r * 0.1, "LIQ ↓")]:
+            fig.add_hline(y=p, line_color="#FF6B1A99", line_width=2,
+                          annotation_text=f" {lbl}", annotation_font_color="#FF6B1A",
+                          annotation_font_size=9, row=1, col=1)
+    elif strategy == "AMD Model":
+        for p, lbl in [(lo + r * 0.2, "ACC"), (hi - r * 0.15, "DIST")]:
+            fig.add_hline(y=p, line_color="#B388FF99", line_width=2,
+                          annotation_text=f" {lbl}", annotation_font_color="#B388FF",
+                          annotation_font_size=9, row=1, col=1)
+    elif strategy == "Impulse Trend":
+        ema21 = df["close"].ewm(span=21).mean().iloc[-1]
+        fig.add_hline(y=ema21, line_color="#00E67677", line_width=1,
+                      annotation_text=" EMA 21", annotation_font_color="#00E676",
+                      annotation_font_size=9, row=1, col=1)
+    bx, by, sx, sy = get_markers(df, strategy)
+    if bx:
+        fig.add_trace(go.Scatter(x=bx, y=by, mode="markers",
+            marker=dict(symbol="triangle-up", size=9, color="#00E676"),
+            name="BUY", showlegend=True), row=1, col=1)
+    if sx:
+        fig.add_trace(go.Scatter(x=sx, y=sy, mode="markers",
+            marker=dict(symbol="triangle-down", size=9, color="#FF1744"),
+            name="SELL", showlegend=True), row=1, col=1)
+    fig.update_layout(
+        paper_bgcolor="#0A0A0F", plot_bgcolor="#0A0A0F",
+        font=dict(family="JetBrains Mono", color="#8A8AB0", size=10),
+        xaxis_rangeslider_visible=False,
+        margin=dict(l=0, r=60, t=8, b=0), height=460,
+        legend=dict(bgcolor="#161628", bordercolor="#1E1E3A",
+                    font=dict(color="#8A8AB0", size=9), x=0.01, y=0.99),
     )
+    fig.update_xaxes(gridcolor="#1E1E3A", showgrid=True, zeroline=False,
+                     showspikes=True, spikecolor="#FF6B1A55", spikethickness=1)
+    fig.update_yaxes(gridcolor="#1E1E3A", showgrid=True, zeroline=False,
+                     showspikes=True, spikecolor="#FF6B1A55", spikethickness=1)
+    return fig
 
-# ── FOOTER ────────────────────────────────────────────────────
-st.markdown("""
-<div style='text-align:center;padding:40px 0 20px;color:#2A3347;font-size:12px'>
-  PropIQ · Real Estate Investment Analyzer · Not financial advice
-</div>
-""", unsafe_allow_html=True)
+# ── HTML helpers ──────────────────────────────────────────────────────────────
+def panel_header(text):
+    return f'<div style="padding:7px 12px;background:rgba(255,107,26,0.08);border:1px solid #1E1E3A;border-radius:4px 4px 0 0;font-size:9px;letter-spacing:3px;color:#FF6B1A;font-weight:700;text-transform:uppercase">{text}</div>'
+
+def signal_card(label, value, color, sub):
+    return f'<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;padding:10px 12px;margin-bottom:6px"><div style="font-size:9px;letter-spacing:2px;color:#444466;text-transform:uppercase">{label}</div><div style="font-size:22px;font-weight:700;color:{color}">{value}</div><div style="font-size:10px;color:#8A8AB0;margin-top:2px">{sub}</div></div>'
+
+def ind_card(label, value, color):
+    return f'<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;padding:8px 6px;text-align:center"><div style="font-size:8px;letter-spacing:2px;color:#444466;text-transform:uppercase">{label}</div><div style="font-size:17px;font-weight:700;color:{color};margin-top:2px">{value}</div></div>'
+
+def ai_row(label, value, color):
+    return f'<div style="display:flex;justify-content:space-between;font-size:10px;padding:5px 0;border-bottom:1px solid #1E1E3A"><span style="color:#8A8AB0">{label}</span><span style="font-weight:700;color:{color}">{value}</span></div>'
+
+def ts_item(label, value, color):
+    return f'<div style="background:#0F0F1A;border:1px solid #1E1E3A;border-radius:2px;padding:8px;text-align:center"><div style="font-size:8px;letter-spacing:2px;color:#444466;text-transform:uppercase">{label}</div><div style="font-size:15px;font-weight:700;color:{color}">{value}</div></div>'
+
+# ── SIDEBAR ───────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown('''<div style="display:flex;align-items:center;gap:10px;padding:8px 0 18px 0;border-bottom:1px solid #1E1E3A;margin-bottom:16px">
+    <div style="width:28px;height:28px;background:#FF6B1A;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)"></div>
+    <span style="color:#FF6B1A;font-size:13px;font-weight:700;letter-spacing:4px">APEX TERMINAL</span>
+    </div>''', unsafe_allow_html=True)
+
+    ticker = st.text_input("TICKER", value="SPY", max_chars=6).upper().strip() or "SPY"
+    st.markdown(panel_header("⬡ TIMEFRAME"), unsafe_allow_html=True)
+    tf_label = st.radio("", ["1M", "5M", "10M"], horizontal=True, label_visibility="collapsed", key="tf")
+    tf_min = int(tf_label[:-1])
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(panel_header("⬡ STRATEGY"), unsafe_allow_html=True)
+    strategy = st.selectbox("", list(STRATEGIES.keys()), label_visibility="collapsed", key="strat")
+    analyze = st.button("▶ ANALYZE", type="primary")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    strat_cfg = STRATEGIES[strategy]
+    rules_html = "".join([
+        f'<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #1E1E3A;font-size:10px;color:#8A8AB0;align-items:flex-start"><div style="width:5px;height:5px;min-width:5px;border-radius:50%;background:{strat_cfg["color"]};margin-top:5px"></div><div>{r}</div></div>'
+        for r in strat_cfg["rules"]
+    ])
+    st.markdown(f'''<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;overflow:hidden">
+    <div style="padding:9px 12px;border-bottom:1px solid #1E1E3A;display:flex;align-items:center;gap:10px">
+    <div style="background:{strat_cfg["color"]}22;color:{strat_cfg["color"]};font-weight:800;font-size:12px;padding:3px 7px;border-radius:2px">{strat_cfg["icon"]}</div>
+    <div><div style="font-size:11px;font-weight:700;color:#E8E8F0">{strategy}</div>
+    <div style="font-size:9px;color:#444466">{strat_cfg["description"]}</div></div></div>
+    <div style="padding:10px 12px">{rules_html}</div></div>''', unsafe_allow_html=True)
+
+    st.markdown('<div style="margin-top:16px;font-size:9px;color:#444466;line-height:1.7">Risk models based on Goldman Sachs, Bridgewater & Morgan Stanley frameworks.<br>Not financial advice. Past performance ≠ future results.</div>', unsafe_allow_html=True)
+
+# ── GENERATE DATA ─────────────────────────────────────────────────────────────
+cache_key = f"{ticker}_{tf_min}_{strategy}"
+if "cache_key" not in st.session_state or st.session_state.cache_key != cache_key or analyze:
+    base = BASE_PRICES.get(ticker, 150 + np.random.random() * 300)
+    count = {1: 120, 5: 100, 10: 80}.get(tf_min, 100)
+    df = generate_candles(base, tf_min, count)
+    rng2 = np.random.default_rng(int(datetime.now().timestamp()) % 7777)
+    st.session_state.df = df
+    st.session_state.cache_key = cache_key
+    st.session_state.sig = {
+        "rsi": calc_rsi(df["close"].tolist()),
+        "macd": calc_macd(df["close"].tolist()),
+        "bb": calc_bb_pct(df["close"].tolist()),
+        "vol_ratio": calc_vol_ratio(df["volume"].tolist()),
+        "sentiment": round((rng2.random() - 0.4) * 0.8, 3),
+        "vol_ann": round(12 + rng2.random() * 25, 1),
+        "sweep_str": float(rng2.random()),
+        "prob": round(50 + rng2.random() * 30, 1),
+        "acc": round(55 + rng2.random() * 25, 1),
+        "auc": round(0.55 + rng2.random() * 0.2, 2),
+    }
+
+df = st.session_state.df
+s  = st.session_state.sig
+
+last  = df["close"].iloc[-1];  prev = df["close"].iloc[-2]
+chg   = last - prev;           chg_p = (chg / prev) * 100
+trend = last > prev
+
+rsi, macd, bb, vol_ratio = s["rsi"], s["macd"], s["bb"], s["vol_ratio"]
+sentiment, vol_ann, sweep_str, prob, acc, auc = (
+    s["sentiment"], s["vol_ann"], s["sweep_str"], s["prob"], s["acc"], s["auc"])
+
+direction = "BUY" if (trend and rsi < 70) else "SELL" if (not trend and rsi > 50) else "HOLD"
+dir_col   = "#00E676" if direction == "BUY" else "#FF1744" if direction == "SELL" else "#FFD600"
+vol_reg   = "LOW" if vol_ann < 18 else "NORMAL" if vol_ann < 28 else "HIGH"
+vol_col   = "#00E676" if vol_ann < 18 else "#FFD600" if vol_ann < 28 else "#FF1744"
+sent_lbl  = "BULLISH" if sentiment > 0.1 else "BEARISH" if sentiment < -0.1 else "NEUTRAL"
+sent_col  = "#00E676" if sentiment > 0.1 else "#FF1744" if sentiment < -0.1 else "#FFD600"
+lgbm_sig  = "BUY" if (trend and rsi < 65) else "SELL" if (not trend and rsi > 50) else "HOLD"
+lgbm_col  = "#00E676" if lgbm_sig == "BUY" else "#FF1744" if lgbm_sig == "SELL" else "#FFD600"
+garch_reg = "LOW VOL" if vol_ann < 18 else "NORMAL" if vol_ann < 28 else "HIGH VOL"
+garch_col = "#00E676" if vol_ann < 18 else "#FFD600" if vol_ann < 28 else "#FF1744"
+rsi_col   = "#FF1744" if rsi > 70 else "#00E676" if rsi < 30 else "#FFD600"
+macd_col  = "#00E676" if macd > 0 else "#FF1744"
+swp_lbl   = "HIGH" if sweep_str > 0.66 else "MED" if sweep_str > 0.33 else "LOW"
+swp_col   = "#FF6B1A" if sweep_str > 0.66 else "#FFD600" if sweep_str > 0.33 else "#00E676"
+badge_txt = "⚡ SWEEP DETECTED" if sweep_str > 0.6 else ("▲ BULLISH FLOW" if trend else "▼ BEARISH FLOW")
+badge_col = "#FF6B1A" if sweep_str > 0.6 else ("#00E676" if trend else "#FF1744")
+atr       = last * 0.008 * (1 + np.random.random() * 0.5)
+stop_p    = round(last - atr * 1.5, 2) if trend else round(last + atr * 1.5, 2)
+tp1       = round(last + atr * 2, 2)   if trend else round(last - atr * 2, 2)
+tp2       = round(last + atr * 4, 2)   if trend else round(last - atr * 4, 2)
+chg_sign  = "+" if chg >= 0 else ""
+chg_clr   = "#00E676" if chg >= 0 else "#FF1744"
+
+# ── PRICE BAR ─────────────────────────────────────────────────────────────────
+st.markdown(f'''<div style="background:#0F0F1A;border:1px solid #1E1E3A;border-radius:4px;
+padding:12px 20px;display:flex;align-items:baseline;gap:16px;margin-bottom:12px;
+font-family:'JetBrains Mono',monospace">
+<span style="font-size:30px;font-weight:700;color:#FFD600;letter-spacing:-1px">${last:.2f}</span>
+<span style="font-size:14px;font-weight:600;color:{chg_clr}">{chg_sign}{chg:.2f} ({chg_sign}{chg_p:.2f}%)</span>
+<span style="font-size:10px;color:#444466;letter-spacing:2px">{ticker} · {tf_label}</span>
+<span style="margin-left:auto;font-size:9px;color:{badge_col};letter-spacing:1px;
+border:1px solid {badge_col}44;padding:3px 10px;border-radius:2px;background:{badge_col}11">
+{badge_txt}</span></div>''', unsafe_allow_html=True)
+
+# ── MAIN COLUMNS ──────────────────────────────────────────────────────────────
+col_chart, col_right = st.columns([3, 1.15], gap="medium")
+
+with col_chart:
+    st.plotly_chart(build_chart(df, strategy), use_container_width=True,
+                    config={"displayModeBar": False})
+
+    st.markdown(panel_header("⬡ LIVE SIGNALS"), unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    c1.markdown(signal_card("DIRECTION",         direction, dir_col,  f"Prob: {prob}%"), unsafe_allow_html=True)
+    c2.markdown(signal_card("VOLATILITY REGIME", vol_reg,   vol_col,  f"Ann. Vol: {vol_ann}%"), unsafe_allow_html=True)
+    c3.markdown(signal_card("SENTIMENT",         sent_lbl,  sent_col, f"Score: {'+' if sentiment > 0 else ''}{sentiment:.2f}"), unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(panel_header("⬡ TECHNICAL INDICATORS"), unsafe_allow_html=True)
+    i1, i2, i3, i4, i5 = st.columns(5)
+    i1.markdown(ind_card("RSI(14)",   f"{rsi}",                            rsi_col),  unsafe_allow_html=True)
+    i2.markdown(ind_card("MACD",      f"{'+' if macd>0 else ''}{macd:.3f}", macd_col), unsafe_allow_html=True)
+    i3.markdown(ind_card("BB %",      f"{bb:.2f}",                         "#00B0FF"), unsafe_allow_html=True)
+    i4.markdown(ind_card("VOL RATIO", f"{vol_ratio:.2f}×",                 "#FF6B1A"), unsafe_allow_html=True)
+    i5.markdown(ind_card("SWEEP STR", swp_lbl,                             swp_col),  unsafe_allow_html=True)
+
+with col_right:
+    rng3 = np.random.default_rng(int(datetime.now().timestamp()) % 3333)
+    flow_labels = ["BID", "ASK", "L2", "L3", "MKT"]
+    flow_buys   = [int(45 + rng3.random() * 30) for _ in flow_labels]
+    flow_rows   = "".join([
+        f'<div style="display:flex;align-items:center;gap:6px;font-size:9px;margin-bottom:5px">'
+        f'<div style="color:#8A8AB0;width:28px">{lb}</div>'
+        f'<div style="flex:1;height:14px;background:#0F0F1A;border-radius:2px;position:relative;overflow:hidden">'
+        f'<div style="position:absolute;left:0;top:0;bottom:0;width:{b}%;background:rgba(0,230,118,0.65);border-radius:2px 0 0 2px"></div>'
+        f'<div style="position:absolute;right:0;top:0;bottom:0;width:{100-b}%;background:rgba(255,23,68,0.65);border-radius:0 2px 2px 0"></div></div>'
+        f'<div style="color:#444466;width:28px;text-align:right">{b}%</div></div>'
+        for lb, b in zip(flow_labels, flow_buys)
+    ])
+    st.markdown(f'<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;overflow:hidden;margin-bottom:12px">{panel_header("⬡ ORDER FLOW DELTA")}<div style="padding:10px 12px">{flow_rows}</div></div>', unsafe_allow_html=True)
+
+    ai_rows_html = "".join([ai_row(*r) for r in [
+        ("LightGBM",        lgbm_sig,                                           lgbm_col),
+        ("Up Probability",  f"{prob}%",                                         "#FFD600"),
+        ("Direction Acc.",  f"{acc}%",                                          "#FFD600"),
+        ("AUC (hold-out)",  str(auc),                                           "#FFD600"),
+        ("GARCH Regime",    garch_reg,                                          garch_col),
+        ("Ann. Volatility", f"{vol_ann}%",                                      garch_col),
+        ("VADER Sentiment", sent_lbl,                                           sent_col),
+        ("NLP Score",       f"{'+' if sentiment>0 else ''}{sentiment:.3f}",     sent_col),
+    ]])
+    st.markdown(f'''<div style="background:#161628;border:1px solid #1E1E3A;border-radius:4px;overflow:hidden;margin-bottom:12px">
+    <div style="padding:8px 12px;background:rgba(179,136,255,0.08);border-bottom:1px solid #1E1E3A;display:flex;justify-content:space-between">
+    <span style="font-size:9px;letter-spacing:3px;color:#B388FF;font-weight:700">⬡ AI / ML ANALYSIS</span>
+    <span style="font-size:9px;color:#444466">LightGBM · GARCH · NLP</span></div>
+    <div style="padding:8px 12px">{ai_rows_html}</div></div>''', unsafe_allow_html=True)
+
+    ts_grid = (
+        f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">'
+        f'{ts_item("ENTRY", f"${last:.2f}", "#FFD600")}{ts_item("STOP", f"${stop_p}", "#FF1744")}'
+        f'{ts_item("TP1", f"${tp1}", "#00E676")}{ts_item("TP2", f"${tp2}", "#00E676")}</div>'
+        f'<div style="background:#0F0F1A;border:1px solid #1E1E3A;border-radius:2px;padding:8px;text-align:center">'
+        f'<div style="font-size:8px;letter-spacing:2px;color:#444466">RISK / REWARD</div>'
+        f'<div style="font-size:14px;font-weight:700;color:#FF6B1A">2.0R · ATR ${atr:.2f}</div></div>'
+    )
+    st.markdown(f'''<div style="background:#161628;border:1px solid #FF6B1A;border-radius:4px;padding:14px">
+    <div style="font-size:9px;letter-spacing:3px;color:#FF6B1A;font-weight:700;margin-bottom:10px">
+    ◈ TRADE SETUP — {strat_cfg["short"]}</div>{ts_grid}</div>''', unsafe_allow_html=True)
